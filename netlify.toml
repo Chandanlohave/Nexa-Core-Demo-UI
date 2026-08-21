@@ -1,0 +1,20 @@
+# Netlify configuration for deploying the NEXA Vite React app.
+
+[build]
+  # This command is run to build the site.
+  command = "npm run build"
+  
+  # The directory that contains the deploy-ready assets.
+  publish = "dist"
+
+[build.environment]
+  # Set the Node.js version to ensure compatibility.
+  NODE_VERSION = "20"
+
+# Redirect rule for Single Page Applications (SPAs).
+# This ensures that any direct navigation to a route (e.g., /app/settings)
+# is handled by the index.html file, allowing React Router to take over.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

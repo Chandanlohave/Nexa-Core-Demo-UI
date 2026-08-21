@@ -1,0 +1,36 @@
+
+{
+  "name": "NEXA AI",
+  "short_name": "NEXA",
+  "description": "Advanced Female AI Assistant",
+  "start_url": "/?mode=standalone",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#29dfff",
+  "orientation": "portrait",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "https://ui-avatars.com/api/?name=N&background=29DFFF&color=000&size=192&font-size=0.6&bold=true&length=1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://ui-avatars.com/api/?name=N&background=29DFFF&color=000&size=512&font-size=0.6&bold=true&length=1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://ui-avatars.com/api/?name=N&background=29DFFF&color=000&size=512&font-size=0.6&bold=true&length=1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities", "artificial-intelligence"],
+  "prefer_related_applications": false
+}

@@ -1,0 +1,245 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='512' height='512' fill='black'/%3e%3cpath d='M120 80V432H190L340 190V432H410V80H340L190 322V80H120Z' fill='%2329DFFF' stroke='%2329DFFF' stroke-width='10' stroke-linejoin='round'/%3e%3c/svg%3e" />
+    <!-- VIEWPORT FIX FOR IPHONE NOTCH AND SCALING -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="NEXA AI Assistant" />
+    
+    <!-- IOS PWA SETTINGS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NEXA AI">
+    
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>NEXA AI</title>
+    <!-- MediaPipe Hands for 100% Precise Air Gestures & Skeletal Tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              nexa: { 
+                cyan: 'rgb(var(--nexa-primary) / <alpha-value>)', 
+                blue: '#0077ff', 
+                red: '#ff2a2a', 
+                yellow: '#ffd700', 
+                dark: '#050a14' 
+              }
+            },
+            fontFamily: { sans: ['Rajdhani', 'sans-serif'], mono: ['ui-monospace', 'monospace'] },
+            animation: {
+              'spin-slow': 'spin 8s linear infinite',
+              'spin-reverse-slow': 'spin 12s linear infinite reverse',
+              'breathing': 'breathing 2.5s ease-in-out infinite',
+              'glitch': 'glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite',
+              'fade-in': 'fadeIn 0.5s ease-out forwards',
+              'slide-up': 'slideUp 0.4s ease-out forwards',
+              'scantop': 'scanTop 2s linear infinite'
+            },
+            keyframes: {
+              spin: { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } },
+              breathing: { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(0.97)' } },
+              glitch: {
+                '0%': { transform: 'translate(0)' },
+                '20%': { transform: 'translate(-2px, 2px)' },
+                '40%': { transform: 'translate(-2px, -2px)' },
+                '60%': { transform: 'translate(2px, 2px)' },
+                '80%': { transform: 'translate(2px, -2px)' },
+                '100%': { transform: 'translate(0)' }
+              },
+              fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
+              slideUp: { from: { transform: 'translateY(20px)', opacity: '0' }, to: { transform: 'translateY(0)', opacity: '1' } },
+              scanTop: { '0%': { top: '0%' }, '50%': { top: '100%' }, '100%': { top: '0%' } }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --nexa-primary: 41 223 255; /* Default Cyan RGB */
+      }
+      /* MOBILE VIEWPORT FIXES using dvh (Dynamic Viewport Height) */
+      html {
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+      }
+      body { 
+        height: 100dvh; 
+        width: 100vw;
+        margin: 0; 
+        padding: 0; 
+        background: #000; 
+        color: #fff; 
+        overflow: hidden; 
+        overscroll-behavior: none; 
+        position: fixed; 
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      
+      /* LIGHT MODE OVERRIDES */
+      html.light body { background: #f0f2f5; color: #1a202c; }
+      html.light .app-background { filter: invert(1) hue-rotate(180deg) contrast(0.9); opacity: 0.15; }
+      html.light .scanlines { opacity: 0.05; background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1)); background-size: 100% 4px; }
+      html.light .vignette { background: radial-gradient(circle, rgba(255,255,255,0) 50%, rgba(255,255,255,0.8) 100%); }
+
+      .app-background { 
+        position: fixed; 
+        inset: 0; 
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzjwq1ev/s+IImCgG4AAkAAAWw0L9W8I+KkAAAAASUVORK5CYII=');
+        background-repeat: repeat;
+        opacity: 0.1;
+        z-index: 0;
+        pointer-events: none;
+      }
+      .scanlines {
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+        background-size: 100% 4px;
+        z-index: 50;
+        pointer-events: none;
+        opacity: 0.1;
+      }
+      .vignette {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%);
+        z-index: 10;
+        pointer-events: none;
+      }
+      /* Fallback Loader Styles */
+      .raw-loader {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #000; z-index: 0; color: #0077ff; font-family: monospace;
+      }
+      .error-display {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #110000; z-index: 9999; color: #ff3333; font-family: monospace;
+        display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+        text-align: center;
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.1",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <!-- FALLBACK CONTENT: Visible if React fails to load -->
+    <div id="root">
+        <div class="raw-loader" id="loader">
+            <div class="text-2xl font-bold tracking-[0.5em] animate-pulse">NEXA OS</div>
+            <div class="mt-4 text-xs tracking-widest text-zinc-500">INITIALIZING NEURAL CORE...</div>
+            <div class="mt-20 border border-zinc-800 p-4 rounded text-center">
+                <div class="text-[10px] text-red-500 mb-2">SYSTEM FAULT?</div>
+                <div class="text-zinc-400 text-xs">TRIPLE TAP SCREEN FOR SAFE MODE</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="error-screen" class="error-display">
+        <h2 style="font-size: 20px; margin-bottom: 20px;">SYSTEM BOOT FAILURE</h2>
+        <div id="error-message" style="font-size: 12px; opacity: 0.8; max-width: 400px; word-break: break-all;"></div>
+        <p style="margin-top: 20px; font-size: 12px; color: #ff8888;">
+            RAPIDLY TAP SCREEN 3 TIMES TO ENTER SAFE MODE
+        </p>
+    </div>
+    
+    <script>
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('error-screen').style.display = 'flex';
+        document.getElementById('error-message').innerText = msg + '\n' + url + ':' + lineNo;
+        return false;
+      };
+      
+      window.addEventListener('unhandledrejection', function(event) {
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('error-screen').style.display = 'flex';
+        document.getElementById('error-message').innerText = 'Unhandled Rejection: ' + event.reason;
+      });
+    </script>
+
+    <script type="module" src="/index.tsx"></script>
+    
+    <!-- PWA SERVICE WORKER REGISTRATION (CRITICAL FOR APP INSTALL) -->
+    <script>
+      if (
+        "serviceWorker" in navigator &&
+        window.location.protocol === "https:" &&
+        !window.location.hostname.includes("localhost")
+      ) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/service-worker.js")
+            .then((reg) => {
+              console.log("NEXA ServiceWorker registered:", reg.scope);
+            })
+            .catch((err) => {
+              console.warn("NEXA ServiceWorker registration failed:", err);
+            });
+        });
+      } else {
+        console.log("NEXA ServiceWorker skipped (dev / preview mode)");
+      }
+    </script>
+
+    <!-- DEAD MAN'S SWITCH: TRIPLE TAP TO SAFE MODE -->
+    <script>
+      (function() {
+        let taps = 0;
+        let lastTap = 0;
+        
+        document.addEventListener('touchstart', function(e) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            
+            if (tapLength < 500 && tapLength > 0) {
+                taps++;
+            } else {
+                taps = 1;
+            }
+            lastTap = currentTime;
+            
+            if (taps >= 3) {
+                // Trigger Safe Mode
+                console.log("TRIPLE TAP DETECTED - INITIATING SAFE MODE");
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('safemode', 'true');
+                window.location.href = currentUrl.toString();
+                taps = 0;
+            }
+        });
+      })();
+    </script>
+  </body>
+</html>

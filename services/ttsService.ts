@@ -1,0 +1,244 @@
+
+import { GoogleGenAI, Modality } from "@google/genai";
+import { UserProfile, UserRole, VOICES, VoiceKey } from "../types";
+import { forceFemaleHindi } from "./geminiService";
+
+const CACHE_VERSION = 'v27_female_fix';
+
+let audioCtx: AudioContext | null = null;
+let currentSource: AudioBufferSourceNode | null = null;
+
+// --- INDEXED DB IMPLEMENTATION ---
+const DB_NAME = 'NexaTTSCache';
+const STORE_NAME = 'audio_files';
+const DB_VERSION = 1;
+
+const openDB = (): Promise<IDBDatabase> => {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (event) => {
+            const db = (event.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME);
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+};
+
+const cacheAudio = async (key: string, base64: string) => {
+    try {
+        const db = await openDB();
+        return new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.put(base64, key);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.warn("IndexedDB Cache Failed:", e);
+    }
+};
+
+const getCachedAudio = async (key: string): Promise<string | null> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const req = store.get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (e) {
+        return null;
+    }
+};
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const checkApiKey = () => {
+  const customKey = localStorage.getItem('nexa_client_api_key');
+  if (customKey && customKey.trim().length > 10) return customKey;
+
+  try {
+      const userStr = localStorage.getItem('nexa_user');
+      if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.role === 'USER') {
+               throw new Error("USER_API_KEY_REQUIRED");
+          }
+      }
+  } catch(e: any) {
+      if(e.message === "USER_API_KEY_REQUIRED") throw e;
+  }
+  
+  const systemKey = process.env.API_KEY;
+  if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
+  throw new Error("GUEST_ACCESS_DENIED");
+};
+
+const initAudioContext = () => {
+    if (!audioCtx && typeof window !== 'undefined') {
+        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    }
+};
+
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  const channelData = buffer.getChannelData(0);
+  for (let i = 0; i < frameCount; i++) {
+    channelData[i] = dataInt16[i] / 32768.0;
+  }
+  return buffer;
+}
+
+const playAudioBuffer = (buffer: AudioBuffer, onStart: () => void, onEnd: () => void) => {
+    if (!audioCtx) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.onended = () => { onEnd(); currentSource = null; };
+    source.start();
+    currentSource = source;
+    onStart();
+};
+
+const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, naughtyModeOverride: boolean, onStart: () => void, onEnd: () => void) => {
+    stop();
+    initAudioContext();
+    if (!audioCtx) {
+        onEnd();
+        return;
+    }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    
+    // --- FORCE FEMALE HINDI CORRECTION BEFORE GENERATION ---
+    const correctedText = forceFemaleHindi(text);
+    
+    const currentVoice: VoiceKey = user.voice || 'Aoede'; 
+    const voiceData = VOICES[currentVoice];
+
+    if (cacheKey) {
+        const fullKey = `${cacheKey}_${currentVoice}_${CACHE_VERSION}`;
+        const cachedAudio = await getCachedAudio(fullKey);
+        if (cachedAudio) {
+             try {
+                const audioBytes = decodeBase64(cachedAudio);
+                const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
+                playAudioBuffer(audioBuffer, onStart, onEnd);
+                return;
+             } catch (e) { }
+        }
+    }
+
+    let lastError: any = null;
+    const maxRetries = 3; 
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const apiKey = checkApiKey();
+            const ai = new GoogleGenAI({ apiKey });
+            
+            // --- PRONUNCIATION FIXES ---
+            let pronunciationText = correctedText;
+            pronunciationText = pronunciationText.replace(/^Nexa[:\s\-]*/i, '').trim();
+            pronunciationText = pronunciationText.replace(/Chandan/gi, "चंदन");
+            pronunciationText = pronunciationText.replace(/Lohave/gi, "लोहवे");
+            pronunciationText = pronunciationText.replace(/NEXA/gi, "Nexa");
+            
+            // Bad word filter
+            const phoneticMap: {[key: string]: string} = {
+                "choot": "चूत", "chut": "चूत", "loda": "लौड़ा", "lauda": "लौड़ा",
+                "gaand": "गांड", "gand": "गांड", "fuck": "फक", "sexy": "सैक्सी"
+            };
+
+            for (const [key, value] of Object.entries(phoneticMap)) {
+                const regex = new RegExp(`\\b${key}\\b`, "gi");
+                pronunciationText = pronunciationText.replace(regex, value);
+            }
+
+            let voiceStyle = voiceData ? voiceData.style : "Natural, polite";
+            if (naughtyModeOverride) {
+                voiceStyle = "Intimate, low-pitch, breathy. Like a lover.";
+            }
+
+            const ttsPrompt = `
+            Perform the following text.
+            TEXT: "${pronunciationText}"
+            ROLE: Female Indian Voice Actor.
+            INSTRUCTIONS:
+            1. ACCENT: Indian English / Hinglish.
+            2. GRAMMAR: Ensure Female Gender ("Karti hun", "Sakti hun").
+            3. TONE: ${voiceStyle}
+            `;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-3.1-flash-tts-preview",
+                contents: [{ parts: [{ text: ttsPrompt }] }],
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: currentVoice } } },
+                },
+            });
+
+            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            if (!base64Audio) throw new Error("No audio data");
+
+            if (cacheKey) {
+                const fullKey = `${cacheKey}_${currentVoice}_${CACHE_VERSION}`;
+                cacheAudio(fullKey, base64Audio);
+            }
+
+            const audioBytes = decodeBase64(base64Audio);
+            const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
+            playAudioBuffer(audioBuffer, onStart, onEnd);
+            
+            return; 
+
+        } catch (error: any) {
+            lastError = error;
+            if (attempt < maxRetries) {
+                await delay(attempt * 2000);
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
+    onEnd();
+    if (lastError?.toString().includes('429')) {
+        throw new Error("TTS_RATE_LIMIT_EXCEEDED");
+    }
+};
+
+export const speakIntro = async (user: UserProfile, text: string, cacheKey: string, naughtyModeOverride: boolean, onStart: () => void, onEnd: () => void) => {
+    return generateAndPlay(user, text, cacheKey, naughtyModeOverride, onStart, onEnd);
+};
+
+export const speak = async (user: UserProfile, text: string, naughtyModeOverride: boolean, onStart: () => void, onEnd: () => void) => {
+    return generateAndPlay(user, text, null, naughtyModeOverride, onStart, onEnd);
+};
+
+export const stop = (): void => {
+    if (currentSource) {
+        try { currentSource.stop(); } catch (e) {}
+        currentSource = null;
+    }
+};
