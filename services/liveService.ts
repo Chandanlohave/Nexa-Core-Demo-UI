@@ -292,7 +292,7 @@ export class LiveSessionManager {
       const ctx = canvas.getContext('2d');
       this.framesSent = 0;
 
-      // OPTIMIZED VIDEO STREAMING: 600px width limit, 500ms interval to reduce latency
+      // OPTIMIZED VIDEO STREAMING: 600px width limit, 1000ms interval for stable transmission
       this.videoInterval = window.setInterval(() => {
           if (!ctx || videoEl.paused || videoEl.ended || videoEl.videoWidth === 0) return;
           
@@ -303,20 +303,15 @@ export class LiveSessionManager {
           canvas.height = videoEl.videoHeight * scale;
           ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
           
-          const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+          const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
           
           if(this.sessionPromise) {
               this.sessionPromise.then(s => {
                   s.sendRealtimeInput({ video: { mimeType: 'image/jpeg', data: base64 } });
                   this.framesSent++;
-                  
-                  // HEARTBEAT: Force model to acknowledge visual input every ~2 seconds
-                  if (this.framesSent % 7 === 0) {
-                      this.sendText("[SYSTEM: REFRESH_VISION]");
-                  }
               }).catch(()=>{});
           }
-      }, 500); 
+      }, 1000); 
   }
 
   public stopVideo() {
@@ -417,10 +412,14 @@ export class LiveSessionManager {
           this.callbacks.onTranscriptionUpdate(this.currentInputTranscription, this.currentOutputTranscription);
       }
 
-      if (message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data && this.outputAudioContext) {
-          const audioBytes = decodeBase64(message.serverContent.modelTurn.parts[0].inlineData.data);
-          const audioBuffer = await decodePcmAudioData(audioBytes, this.outputAudioContext);
-          this.queueAudio(audioBuffer);
+      if (message.serverContent?.modelTurn?.parts && this.outputAudioContext) {
+          for (const part of message.serverContent.modelTurn.parts) {
+              if (part.inlineData?.data) {
+                  const audioBytes = decodeBase64(part.inlineData.data);
+                  const audioBuffer = await decodePcmAudioData(audioBytes, this.outputAudioContext);
+                  this.queueAudio(audioBuffer);
+              }
+          }
       }
       
       if (message.serverContent?.turnComplete) {
@@ -443,30 +442,22 @@ export class LiveSessionManager {
   private queueAudio(buffer: AudioBuffer): void {
       if (!this.outputAudioContext || !this.outputAnalyser) return;
       const currentTime = this.outputAudioContext.currentTime;
-      if (this.nextAudioStartTime < currentTime) this.nextAudioStartTime = currentTime;
       
-      const startTime = this.nextAudioStartTime;
-      this.outputAudioQueue.push({ buffer, startTime });
-      this.nextAudioStartTime += buffer.duration;
-      
-      if (!this.isPlaying) {
-          if (this.outputAudioQueue.length >= this.BUFFER_THRESHOLD) { this.playQueue(); } 
-          else { this.isBuffering = true; }
+      // Ensure smooth continuous playback timing without buffer gaps or overlaps
+      if (this.nextAudioStartTime < currentTime) {
+          this.nextAudioStartTime = currentTime + 0.05;
       }
-  }
-
-  private playQueue(): void {
-      if (this.outputAudioQueue.length === 0 || !this.outputAudioContext || !this.outputAnalyser) { this.isPlaying = false; return; }
-      this.isPlaying = true;
-      this.isBuffering = false;
       
-      const { buffer, startTime } = this.outputAudioQueue.shift()!;
       const source = this.outputAudioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(this.outputAnalyser); 
-      source.start(startTime);
-      this.activeAudioSources.add(source);
+      source.start(this.nextAudioStartTime);
+      this.nextAudioStartTime += buffer.duration;
       
-      source.onended = () => { source.disconnect(); this.activeAudioSources.delete(source); this.playQueue(); };
+      this.activeAudioSources.add(source);
+      source.onended = () => {
+          try { source.disconnect(); } catch (e) {}
+          this.activeAudioSources.delete(source);
+      };
   }
 }

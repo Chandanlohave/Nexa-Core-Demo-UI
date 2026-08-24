@@ -312,8 +312,23 @@ const App: React.FC = () => {
 
     const speakText = async (text: string, force: boolean = false) => {
          if (user) {
+             stopTextTTS();
              setHudState(HUDState.SPEAKING);
-             await speakTextTTS(user, text, config.naughtyModeOverride || false, () => {}, () => setHudState(HUDState.IDLE));
+             return new Promise<void>((resolve) => {
+                 speakTextTTS(
+                     user, 
+                     text, 
+                     config.naughtyModeOverride || false, 
+                     () => {}, 
+                     () => {
+                         setHudState(HUDState.IDLE);
+                         resolve();
+                     }
+                 ).catch(() => {
+                     setHudState(HUDState.IDLE);
+                     resolve();
+                 });
+             });
          }
     };
 

@@ -7,6 +7,7 @@ const CACHE_VERSION = 'v27_female_fix';
 
 let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
+let currentSessionId = 0;
 
 // --- INDEXED DB IMPLEMENTATION ---
 const DB_NAME = 'NexaTTSCache';
@@ -109,29 +110,64 @@ async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<
   return buffer;
 }
 
-const playAudioBuffer = (buffer: AudioBuffer, onStart: () => void, onEnd: () => void) => {
-    if (!audioCtx) return;
+const playAudioBuffer = (buffer: AudioBuffer, sessionId: number, onStart: () => void, onEnd: () => void) => {
+    if (!audioCtx || sessionId !== currentSessionId) {
+        return;
+    }
+    
+    // Stop any previously playing node immediately
+    if (currentSource) {
+        try {
+            currentSource.onended = null;
+            currentSource.stop(0);
+            currentSource.disconnect();
+        } catch (e) {}
+        currentSource = null;
+    }
+
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(audioCtx.destination);
-    source.onended = () => { onEnd(); currentSource = null; };
-    source.start();
+    
+    source.onended = () => {
+        if (currentSource === source) {
+            currentSource = null;
+            if (sessionId === currentSessionId) {
+                onEnd();
+            }
+        }
+        try { source.disconnect(); } catch (e) {}
+    };
+    
     currentSource = source;
-    onStart();
+    if (sessionId === currentSessionId) {
+        onStart();
+    }
+    source.start(0);
 };
 
 const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, naughtyModeOverride: boolean, onStart: () => void, onEnd: () => void) => {
+    // Increment session ID to cancel any pending or in-flight TTS calls
     stop();
+    const mySessionId = currentSessionId;
+
     initAudioContext();
     if (!audioCtx) {
-        onEnd();
+        if (mySessionId === currentSessionId) onEnd();
         return;
     }
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-    
+    if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch (e) {}
+    }
+    if (mySessionId !== currentSessionId) return;
+
     // --- FORCE FEMALE HINDI CORRECTION BEFORE GENERATION ---
     const correctedText = forceFemaleHindi(text);
-    
+    if (!correctedText || !correctedText.trim()) {
+        if (mySessionId === currentSessionId) onEnd();
+        return;
+    }
+
     const currentVoice: VoiceKey = user.voice || 'Aoede'; 
     const voiceData = VOICES[currentVoice];
 
@@ -139,19 +175,22 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
         const fullKey = `${cacheKey}_${currentVoice}_${CACHE_VERSION}`;
         const cachedAudio = await getCachedAudio(fullKey);
         if (cachedAudio) {
-             try {
+            if (mySessionId !== currentSessionId) return;
+            try {
                 const audioBytes = decodeBase64(cachedAudio);
                 const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
-                playAudioBuffer(audioBuffer, onStart, onEnd);
+                if (mySessionId !== currentSessionId) return;
+                playAudioBuffer(audioBuffer, mySessionId, onStart, onEnd);
                 return;
-             } catch (e) { }
+            } catch (e) { }
         }
     }
 
     let lastError: any = null;
-    const maxRetries = 3; 
+    const maxRetries = 2; 
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        if (mySessionId !== currentSessionId) return;
         try {
             const apiKey = checkApiKey();
             const ai = new GoogleGenAI({ apiKey });
@@ -198,6 +237,9 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
                 },
             });
 
+            // Check if user requested something else or cancelled while waiting for Gemini API response
+            if (mySessionId !== currentSessionId) return;
+
             const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
             if (!base64Audio) throw new Error("No audio data");
 
@@ -208,21 +250,26 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
 
             const audioBytes = decodeBase64(base64Audio);
             const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
-            playAudioBuffer(audioBuffer, onStart, onEnd);
-            
+
+            if (mySessionId !== currentSessionId) return;
+
+            playAudioBuffer(audioBuffer, mySessionId, onStart, onEnd);
             return; 
 
         } catch (error: any) {
             lastError = error;
+            if (mySessionId !== currentSessionId) return;
             if (attempt < maxRetries) {
-                await delay(attempt * 2000);
-                continue;
+                await delay(attempt * 1000);
             } else {
                 break;
             }
         }
     }
-    onEnd();
+    
+    if (mySessionId === currentSessionId) {
+        onEnd();
+    }
     if (lastError?.toString().includes('429')) {
         throw new Error("TTS_RATE_LIMIT_EXCEEDED");
     }
@@ -237,8 +284,13 @@ export const speak = async (user: UserProfile, text: string, naughtyModeOverride
 };
 
 export const stop = (): void => {
+    currentSessionId++;
     if (currentSource) {
-        try { currentSource.stop(); } catch (e) {}
+        try {
+            currentSource.onended = null;
+            currentSource.stop(0);
+            currentSource.disconnect();
+        } catch (e) {}
         currentSource = null;
     }
 };

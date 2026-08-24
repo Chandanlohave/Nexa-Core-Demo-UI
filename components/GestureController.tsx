@@ -42,6 +42,7 @@ export const GestureController = React.forwardRef<GestureControllerRef, GestureC
 
   const smoothedScaleRef = useRef<number>(1.0);
   const smoothedPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const gestureHistoryRef = useRef<string[]>([]);
 
   React.useImperativeHandle(ref, () => ({
     resetZoom: () => {
@@ -125,8 +126,8 @@ export const GestureController = React.forwardRef<GestureControllerRef, GestureC
           hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.6
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
           });
 
           hands.onResults((results: any) => {
@@ -142,8 +143,8 @@ export const GestureController = React.forwardRef<GestureControllerRef, GestureC
                 await mediaPipeHandsRef.current.send({ image: video });
               }
             },
-            width: 320,
-            height: 240
+            width: 640,
+            height: 480
           });
 
           camera.start();
@@ -219,75 +220,104 @@ export const GestureController = React.forwardRef<GestureControllerRef, GestureC
         });
       }
 
-      // 2. Exact Landmark Distance Calculations
+      // 2. Scale-Invariant Landmark Calculations
       const wrist = landmarks[0];
       const thumbTip = landmarks[4];
+      const thumbMCP = landmarks[2];
       const indexTip = landmarks[8];
+      const indexMCP = landmarks[5];
       const middleTip = landmarks[12];
+      const middleMCP = landmarks[9];
       const ringTip = landmarks[16];
+      const ringMCP = landmarks[13];
       const pinkyTip = landmarks[20];
+      const pinkyMCP = landmarks[17];
       const palmCenter = landmarks[9];
 
-      // Pinch Distance: Thumb Tip (4) to Index Tip (8)
-      const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+      // Hand palm baseline distance (Wrist to Middle MCP)
+      const palmSize = Math.max(0.01, Math.hypot(wrist.x - middleMCP.x, wrist.y - middleMCP.y));
 
-      // Distance from wrist to each fingertip (Hand Spread / Openness)
-      const dThumb = Math.hypot(wrist.x - thumbTip.x, wrist.y - thumbTip.y);
-      const dIndex = Math.hypot(wrist.x - indexTip.x, wrist.y - indexTip.y);
-      const dMiddle = Math.hypot(wrist.x - middleTip.x, wrist.y - middleTip.y);
-      const dRing = Math.hypot(wrist.x - ringTip.x, wrist.y - ringTip.y);
-      const dPinky = Math.hypot(wrist.x - pinkyTip.x, wrist.y - pinkyTip.y);
+      // Extension ratios for each finger (Tip-Wrist distance vs MCP-Wrist distance)
+      const ratioIndex = Math.hypot(wrist.x - indexTip.x, wrist.y - indexTip.y) / Math.hypot(wrist.x - indexMCP.x, wrist.y - indexMCP.y);
+      const ratioMiddle = Math.hypot(wrist.x - middleTip.x, wrist.y - middleTip.y) / Math.hypot(wrist.x - middleMCP.x, wrist.y - middleMCP.y);
+      const ratioRing = Math.hypot(wrist.x - ringTip.x, wrist.y - ringTip.y) / Math.hypot(wrist.x - ringMCP.x, wrist.y - ringMCP.y);
+      const ratioPinky = Math.hypot(wrist.x - pinkyTip.x, wrist.y - pinkyTip.y) / Math.hypot(wrist.x - pinkyMCP.x, wrist.y - pinkyMCP.y);
 
-      const avgFingerSpread = (dThumb + dIndex + dMiddle + dRing + dPinky) / 5;
+      const isIndexExtended = ratioIndex > 1.20;
+      const isMiddleExtended = ratioMiddle > 1.20;
+      const isRingExtended = ratioRing > 1.20;
+      const isPinkyExtended = ratioPinky > 1.20;
 
-      const isPointing = dIndex > 0.4 && dMiddle < 0.28 && dRing < 0.28 && dPinky < 0.28;
+      const extendedCount = (isIndexExtended ? 1 : 0) + (isMiddleExtended ? 1 : 0) + (isRingExtended ? 1 : 0) + (isPinkyExtended ? 1 : 0);
 
-      // 3. Gesture Classification & Dynamic Scaling
+      // Normalized Pinch Distance (Thumb Tip to Index Tip relative to palm size)
+      const rawPinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+      const pinchRatio = rawPinchDist / palmSize;
+
+      // 3. Robust Gesture Classification
+      const isPointing = isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended;
+      const isPinch = pinchRatio < 0.45 && !isPointing;
+      const isOpenPalm = extendedCount >= 3;
+      const isFist = extendedCount === 0 && pinchRatio >= 0.45;
+
+      let detectedGesture: GestureData['gesture'] = 'IDLE';
       let targetScale = 1.0;
-      let gestureType: GestureData['gesture'] = 'IDLE';
 
       if (isPointing) {
-        targetScale = smoothedScaleRef.current; // Keep scale as is
-        gestureType = 'POINTING';
-      } else if (pinchDist < 0.08) {
-        // Active Pinch Gesture -> Instant Smooth Shrink (0.35x - 0.7x)
-        targetScale = 0.35 + (pinchDist / 0.08) * 0.35;
-        gestureType = 'PINCH';
-      } else if (avgFingerSpread > 0.48) {
-        // Open Palm Spread -> Dramatic Nebula Expansion (1.4x - 2.5x)
-        const spreadFactor = Math.min(1.0, (avgFingerSpread - 0.48) / 0.28);
-        targetScale = 1.3 + spreadFactor * 1.2;
-        gestureType = 'OPEN_PALM';
-      } else if (avgFingerSpread < 0.26) {
-        // Tight Closed Fist -> Collapse Core (0.4x - 0.6x)
+        detectedGesture = 'POINTING';
+        targetScale = smoothedScaleRef.current; // Maintain current zoom
+      } else if (isPinch) {
+        detectedGesture = 'PINCH';
+        // Smoothly shrink scale based on pinch tightness (0.35x - 0.85x)
+        const tightness = Math.max(0, Math.min(1.0, pinchRatio / 0.45));
+        targetScale = 0.35 + tightness * 0.50;
+      } else if (isOpenPalm) {
+        detectedGesture = 'OPEN_PALM';
+        // Smoothly expand scale based on finger openness (1.35x - 2.50x)
+        const avgExtension = (ratioIndex + ratioMiddle + ratioRing + ratioPinky) / 4;
+        const spreadFactor = Math.max(0, Math.min(1.0, (avgExtension - 1.20) / 0.50));
+        targetScale = 1.35 + spreadFactor * 1.15;
+      } else if (isFist) {
+        detectedGesture = 'FIST';
         targetScale = 0.45;
-        gestureType = 'FIST';
       } else {
-        // Intermediate Natural Hand
-        targetScale = 1.0 + (avgFingerSpread - 0.36) * 2.2;
-        gestureType = targetScale > 1.15 ? 'OPEN_PALM' : (targetScale < 0.85 ? 'PINCH' : 'IDLE');
+        detectedGesture = 'IDLE';
+        targetScale = 1.0;
       }
 
-      // Smooth Interpolation
-      smoothedScaleRef.current += (targetScale - smoothedScaleRef.current) * 0.28;
+      // Gesture Stabilization (Majority Voting Filter across 4 frames to eliminate flicker)
+      gestureHistoryRef.current.push(detectedGesture);
+      if (gestureHistoryRef.current.length > 4) {
+        gestureHistoryRef.current.shift();
+      }
+      const counts: Record<string, number> = {};
+      gestureHistoryRef.current.forEach(g => { counts[g] = (counts[g] || 0) + 1; });
+      let stableGesture: GestureData['gesture'] = detectedGesture;
+      Object.entries(counts).forEach(([g, count]) => {
+        if (count >= 2) stableGesture = g as GestureData['gesture'];
+      });
+
+      // Smooth Interpolation for Scale
+      smoothedScaleRef.current += (targetScale - smoothedScaleRef.current) * 0.25;
       const finalScale = Math.max(0.35, Math.min(2.5, smoothedScaleRef.current));
 
       // 4. Normalized Hand Position for 3D Camera Tilt (-1 to 1)
-      const normX = (0.5 - palmCenter.x) * 2; // Inverted for mirror
+      const isFront = facingMode === 'user';
+      const normX = isFront ? (0.5 - palmCenter.x) * 2 : (palmCenter.x - 0.5) * 2;
       const normY = (palmCenter.y - 0.5) * 2;
-      smoothedPosRef.current.x += (normX - smoothedPosRef.current.x) * 0.25;
-      smoothedPosRef.current.y += (normY - smoothedPosRef.current.y) * 0.25;
+      smoothedPosRef.current.x += (normX - smoothedPosRef.current.x) * 0.22;
+      smoothedPosRef.current.y += (normY - smoothedPosRef.current.y) * 0.22;
 
-      setCurrentGesture(gestureType);
+      setCurrentGesture(stableGesture);
       setScaleDisplay(parseFloat(finalScale.toFixed(2)));
 
       onGestureUpdate({
         handDetected: true,
-        gesture: gestureType,
+        gesture: stableGesture,
         scale: finalScale,
-        pinchDistance: pinchDist,
+        pinchDistance: pinchRatio,
         handPosition: smoothedPosRef.current,
-        fingerCount: gestureType === 'OPEN_PALM' ? 5 : (gestureType === 'PINCH' ? 2 : 0)
+        fingerCount: extendedCount
       });
     } else {
       setIsHandVisible(false);
