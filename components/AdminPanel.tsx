@@ -277,8 +277,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
         {currentUser && (
             <div>
                 <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono mb-1">Voice Synthesis Engine</label>
-                <select value={currentUser.voice || 'Kore'} onChange={(e) => handleVoiceChange(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-mono p-2 rounded focus:border-nexa-cyan outline-none transition-colors">
-                    {(Object.keys(VOICES) as VoiceKey[]).map(key => (<option key={key} value={key}>{VOICES[key].name} ({VOICES[key].gender})</option>))}
+                <select value={currentUser.voice || 'Aoede'} onChange={(e) => handleVoiceChange(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-mono p-2 rounded focus:border-nexa-cyan outline-none transition-colors">
+                    {(Object.keys(VOICES) as VoiceKey[]).map(key => (<option key={key} value={key}>{VOICES[key].name} ({VOICES[key].description})</option>))}
                 </select>
             </div>
         )}

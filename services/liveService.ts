@@ -118,6 +118,18 @@ export class LiveSessionManager {
     this.naughtyMode = naughtyModeOverride;
     this.callbacks = callbacks;
   }
+
+  public async updateVoice(voice: VoiceKey) {
+    this.user.voice = voice;
+    if (this.session) {
+      try {
+        this.session.close();
+      } catch (e) {}
+      this.session = null;
+      this.sessionPromise = null;
+      await this.connect();
+    }
+  }
   
   private checkApiKey = () => {
     const customKey = localStorage.getItem('nexa_client_api_key');
@@ -146,29 +158,51 @@ export class LiveSessionManager {
     let memoryContext = "";
     try {
         const recentHistory = await getMemoryForPrompt(this.user);
-        const historyText = recentHistory.slice(-5).map(h => { 
-            const role = h.role === 'user' ? (this.user.name || 'USER') : 'NEXA';
-            return `${role}: ${h.parts[0].text.substring(0, 100)}...`; 
-        }).join('\n');
-        memoryContext = `**SESSION MEMORY:**\n${historyText}`;
+        const historyMessages = recentHistory.slice(-35);
+        if (historyMessages.length > 0) {
+            const historyText = historyMessages.map(h => { 
+                const role = h.role === 'user' ? (this.user.name || 'USER') : 'NEXA';
+                const text = h.parts[0]?.text || '';
+                return `${role}: ${text}`; 
+            }).join('\n');
+            memoryContext = `**PAST CONVERSATION HISTORY & FULL RECENT DIALOGUE (CRITICAL MEMORY BANK):**\n${historyText}`;
+        }
+    } catch (e) {}
+
+    let userFactsContext = "";
+    try {
+        const facts = getFacts(this.user);
+        if (facts.length > 0) {
+            userFactsContext = `**SAVED USER FACTS & BEHAVIOR PREFERENCES:**\n` + facts.map(f => `- ${f.content}`).join('\n');
+        }
     } catch (e) {}
 
     let instruction = `
     ${rigidIntro}
     ${timeContext}
+    ${userFactsContext}
     ${memoryContext}
+    
+    **MEMORY PROTOCOL (NON-NEGOTIABLE):**
+    1. You have full access to PAST CONVERSATION HISTORY above.
+    2. Remember everything discussed 5, 10, 20, or 30 minutes ago.
+    3. NEVER say you forgot or don't know what was discussed earlier in the session or in previous conversations.
     
     **VISION PROTOCOL (CRITICAL):**
     1. **IMAGE DETECTION:** If you receive an image stream, ANALYZE IT INSTANTLY.
-    2. **HEARTBEAT:** You will see "[SYSTEM: REFRESH_VISION]". This means "Look at the camera now".
-    3. **DESCRIPTION:** Be natural. "Mujhe dikh raha hai ki...", "Ye toh ek...", "Aapke saamne...".
-    4. **NO HALLUCINATION:** If it's dark or unclear, say "Thoda andhera hai" or "Clear nahi dikh raha". Do not make things up.
+    2. **DESCRIPTION:** Be natural. "Mujhe dikh raha hai ki...", "Ye toh ek...", "Aapke saamne...".
+    3. **NO HALLUCINATION:** If it's dark or unclear, say "Thoda andhera hai" or "Clear nahi dikh raha". Do not make things up.
     
-    **GENDER & GRAMMAR (ABSOLUTE RULES):**
-    1. **YOU ARE FEMALE.**
-    2. **SAY:** "Karti hoon", "Sakti hoon", "Jaungi", "Dekhungi".
-    3. **NEVER SAY:** "Karta hoon", "Sakta hoon".
+    **GENDER & VOICE PROTOCOL (NON-NEGOTIABLE):**
+    1. **YOU ARE FEMALE.** Your voice is sweet, clear, natural female (${this.user.voice || 'Aoede'}).
+    2. **GRAMMAR:** ALWAYS use female grammar ("Karti hoon", "Sakti hoon", "Jaungi", "Dekhungi"). NEVER use male grammar ("Karta hoon", "Sakta hoon").
     
+    **NATURAL CONVERSATIONAL PACE & STYLE:**
+    1. Speak calmly, warmly, and naturally like a real human friend sitting next to the user.
+    2. Do NOT speak too fast. Do NOT read like a script or a robot.
+    3. Keep answers concise, sweet, and interactive. Use short sentences with proper punctuation (commas, full stops) so speech synthesis has natural pauses.
+    4. Follow all specified user behavior preferences and facts strictly.
+
     **PRONUNCIATION:**
     - Read Hinglish as Hindi. "Sahi" -> "सही", "Kya" -> "क्या".
     `;
@@ -224,7 +258,7 @@ export class LiveSessionManager {
             this.startLevelMonitoring();
         }
         
-        const voiceName = this.user.voice || 'Kore';
+        const voiceName = this.user.voice || 'Aoede';
 
         this.sessionPromise = ai.live.connect({
             model: 'gemini-3.1-flash-live-preview',

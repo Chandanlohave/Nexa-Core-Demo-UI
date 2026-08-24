@@ -3,7 +3,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { UserProfile, UserRole, VOICES, VoiceKey } from "../types";
 import { forceFemaleHindi } from "./geminiService";
 
-const CACHE_VERSION = 'v27_female_fix';
+const CACHE_VERSION = 'v28_female_natural_voice';
 
 let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
@@ -213,19 +213,21 @@ const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string
                 pronunciationText = pronunciationText.replace(regex, value);
             }
 
-            let voiceStyle = voiceData ? voiceData.style : "Natural, polite";
+            let voiceStyle = voiceData ? voiceData.style : "Natural, sweet, clear female voice";
             if (naughtyModeOverride) {
-                voiceStyle = "Intimate, low-pitch, breathy. Like a lover.";
+                voiceStyle = "Intimate, soft, breathy, sweet female voice.";
             }
 
             const ttsPrompt = `
-            Perform the following text.
+            Perform the following text in a realistic, natural female voice.
             TEXT: "${pronunciationText}"
-            ROLE: Female Indian Voice Actor.
+            ROLE: Indian Female Voice.
             INSTRUCTIONS:
-            1. ACCENT: Indian English / Hinglish.
-            2. GRAMMAR: Ensure Female Gender ("Karti hun", "Sakti hun").
-            3. TONE: ${voiceStyle}
+            1. VOICE PITCH: Sweet, clear, natural female pitch. NEVER lower the pitch, NEVER sound heavy, deep, or male-like.
+            2. ACCENT: Indian English / Hinglish.
+            3. GRAMMAR: Ensure Female Gender ("Karti hun", "Sakti hun").
+            4. SPEAKING SPEED & PACE: Relaxed, calm, normal conversational pace. DO NOT speak fast or rush like reading a script. Pause naturally at commas and full stops.
+            5. TONE: ${voiceStyle}
             `;
 
             const response = await ai.models.generateContent({

@@ -332,6 +332,17 @@ const App: React.FC = () => {
          }
     };
 
+    const handleVoiceChange = (v: VoiceKey) => {
+        if (!user) return;
+        const updated = { ...user, voice: v };
+        setUser(updated);
+        localStorage.setItem('nexa_user', JSON.stringify(updated));
+        syncUserProfile(updated);
+        if (liveSession) {
+            liveSession.updateVoice(v);
+        }
+    };
+
     const cleanupCamera = useCallback(() => {
         if (cameraStreamRef.current) {
             cameraStreamRef.current.getTracks().forEach(track => track.stop());
@@ -820,11 +831,8 @@ const App: React.FC = () => {
                         rotationSpeedMultiplier={config.micRotationSpeed || 1}
                     />
                     
-                    <AdminPanel isOpen={showAdmin} onClose={() => setShowAdmin(false)} config={config} onConfigChange={setConfig} onClearMemory={() => clearAllMemory(user)} onManageAccounts={() => setShowAccounts(true)} onViewStudyHub={() => setShowStudyHub(true)} />
-                    <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={(v) => {
-                        setUser({...user, voice: v});
-                        syncUserProfile({...user, voice: v});
-                    }} />
+                    <AdminPanel isOpen={showAdmin} onClose={() => setShowAdmin(false)} config={config} onConfigChange={setConfig} onClearMemory={() => clearAllMemory(user)} onManageAccounts={() => setShowAccounts(true)} onViewStudyHub={() => setShowStudyHub(true)} onVoiceChange={handleVoiceChange} />
+                    <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} />
                     <StudyHubPanel isOpen={showStudyHub} onClose={() => setShowStudyHub(false)} user={user} onStartLesson={(subject, topic) => {
                          processUserInput(`Teach me ${topic || 'summary'} from ${subject.courseName}`, null);
                          setShowStudyHub(false);

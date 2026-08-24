@@ -87,7 +87,7 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
                 <div className="grid grid-cols-2 gap-2">
                     {(Object.keys(VOICES) as VoiceKey[]).map(key => {
                         const voice = VOICES[key];
-                        const isActive = currentVoice === key;
+                        const isActive = (currentVoice || 'Aoede') === key;
                         return (
                             <button
                                 key={key}

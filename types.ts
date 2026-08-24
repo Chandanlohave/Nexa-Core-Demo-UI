@@ -10,13 +10,13 @@ export const VOICES = {
     name: 'Aoede', 
     description: 'Sweet & Energetic', 
     gender: 'Female', 
-    style: 'High-pitched, enthusiastic, sweet, youthful. Best for casual conversation.' 
+    style: 'Sweet, bright, energetic, youthful female voice.' 
   },
   Kore: { 
     name: 'Kore', 
-    description: 'Calm & Professional', 
+    description: 'Calm & Soft', 
     gender: 'Female', 
-    style: 'Soothing, balanced, mature, motherly. Good for reading and serious topics.' 
+    style: 'Soothing, soft, clear, natural female voice.' 
   }
 } as const;
 
