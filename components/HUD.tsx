@@ -4,6 +4,8 @@ import { HUDState } from '../types';
 import NebulaOrb from './NebulaOrb';
 import { GestureData } from './GestureController';
 
+import { NexaAgentNode } from './NebulaOrb';
+
 interface HUDProps {
   state: HUDState;
   rotationSpeed?: number;
@@ -13,6 +15,7 @@ interface HUDProps {
   gestureData?: GestureData;
   visualMode?: 'NEBULA' | 'CLASSIC';
   activeHighlightAgentId?: string | null;
+  customAgents?: NexaAgentNode[];
   onResetZoom?: () => void;
 }
 
@@ -391,6 +394,7 @@ const HUD: React.FC<HUDProps> = React.memo(({
   gestureData,
   visualMode = 'NEBULA',
   activeHighlightAgentId,
+  customAgents,
   onResetZoom
 }) => {
   if (visualMode === 'NEBULA' && state !== HUDState.CODING) {
@@ -404,6 +408,7 @@ const HUD: React.FC<HUDProps> = React.memo(({
           ecoMode={ecoMode}
           gestureData={gestureData}
           activeHighlightAgentId={activeHighlightAgentId}
+          customAgents={customAgents}
           onResetZoom={onResetZoom}
         />
       </div>

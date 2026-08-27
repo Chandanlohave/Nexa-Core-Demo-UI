@@ -27,12 +27,15 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with databaseId and forced long polling for sandboxed environments
+// Initialize Firestore with databaseId, forced long polling, and relaxed timeout for sandboxed environments
 const databaseId = config.firestoreDatabaseId || "(default)";
 let dbInstance;
 try {
   dbInstance = initializeFirestore(app, {
     experimentalForceLongPolling: true,
+    longPollingOptions: {
+      timeoutSeconds: 30
+    },
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   }, databaseId);
 } catch (e) {

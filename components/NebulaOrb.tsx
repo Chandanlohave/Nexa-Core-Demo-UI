@@ -46,6 +46,7 @@ interface NebulaOrbProps {
   ecoMode?: boolean;
   gestureData?: GestureData;
   activeHighlightAgentId?: string | null;
+  customAgents?: NexaAgentNode[];
   onSelectAgent?: (agent: NexaAgentNode) => void;
   onResetZoom?: () => void;
 }
@@ -58,6 +59,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
   ecoMode = false,
   gestureData,
   activeHighlightAgentId,
+  customAgents = [],
   onSelectAgent,
   onResetZoom
 }) => {
@@ -173,11 +175,11 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_kronos',
-        name: 'ARCHON',
-        role: 'QUANTUM ANALYTICS',
+        name: 'KRONOS',
+        role: 'Business Analytics & Strategy Engine',
         status: 'ANALYTICS ENGINE // ONLINE',
-        metric: 'ROI & Data Intel',
-        color: '#EC4899',
+        metric: 'Accuracy: 99.8% • 1.2M Datapoints/sec',
+        color: '#F59E0B',
         x: 0,
         y: -185,
         z: 15,
@@ -187,10 +189,10 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_cypher',
-        name: 'CIPHER',
-        role: 'CODE ARCHITECTURE',
+        name: 'CYPHER',
+        role: 'Code Compiler & AST Debugger',
         status: 'COMPILER CORE // OPTIMAL',
-        metric: 'TS AST • Zero Errors',
+        metric: 'Vite HMR Active • Zero AST Errors',
         color: '#10B981',
         x: 165,
         y: -95,
@@ -201,11 +203,11 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_aura',
-        name: 'ARGUS',
-        role: 'VISION & SPATIAL',
+        name: 'AURA',
+        role: 'Multimodal Vision AI & Optical Feed',
         status: 'VISION SENSOR // ACTIVE',
-        metric: '30 FPS Optical Feed',
-        color: '#F59E0B',
+        metric: '30 FPS Optical • 21-Joint Pose',
+        color: '#A855F7',
         x: 165,
         y: 95,
         z: 20,
@@ -215,11 +217,11 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_veritas',
-        name: 'ORION',
-        role: 'RESEARCH & DEEP SEARCH',
-        status: 'SEARCH GROUNDING // LIVE',
+        name: 'VERITAS',
+        role: 'Deep Web Research & Fact-Checker',
+        status: 'SEARCH GROUNDING // CONNECTED',
         metric: '100+ Live Sources',
-        color: '#3B82F6',
+        color: '#06B6D4',
         x: 0,
         y: 185,
         z: -10,
@@ -229,11 +231,11 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_echo',
-        name: 'AEGIS',
-        role: 'SECURITY & DEFENSE',
-        status: 'FIREWALL MESH // SECURE',
-        metric: 'AES-256 Encrypted',
-        color: '#EF4444',
+        name: 'ECHO',
+        role: 'Task Automation & Priorities Engine',
+        status: 'TASK DAEMON // RUNNING',
+        metric: 'Priority Queue Ready',
+        color: '#F97316',
         x: -165,
         y: 95,
         z: 15,
@@ -243,11 +245,11 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       },
       {
         id: 'agent_valkyrie',
-        name: 'KRONOS',
-        role: 'WORKFLOW ORCHESTRATION',
-        status: 'TASK DAEMON // RUNNING',
-        metric: 'Priority Queue Ready',
-        color: '#8B5CF6',
+        name: 'VALKYRIE',
+        role: 'System Security & Access Firewall',
+        status: 'FIREWALL MESH // SECURE',
+        metric: '100% Secure • AES-256 Encrypted',
+        color: '#EF4444',
         x: -165,
         y: -95,
         z: -20,
@@ -256,6 +258,21 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         activityLevel: 0.98
       }
     ];
+
+    // Merge custom sub-agents into 3D orbit dynamically
+    if (customAgents && customAgents.length > 0) {
+      customAgents.forEach((ca, idx) => {
+        const angle = ((idx + 1) * Math.PI * 2) / (customAgents.length + 1);
+        const radius = 220;
+        agents.push({
+          ...ca,
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius,
+          z: (idx % 2 === 0 ? 1 : -1) * 25,
+          connections: [0, 1, (idx % 6) + 1]
+        });
+      });
+    }
 
     agentsRef.current = agents;
 
@@ -274,7 +291,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       });
     });
     packetsRef.current = packets;
-  }, [ecoMode, state]);
+  }, [ecoMode, state, customAgents]);
 
   // Sync Gesture Data (Scale, Air Tilt)
   useEffect(() => {
@@ -436,12 +453,29 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       // 0. SCI-FI HUD BACKGROUND & VOLUMETRIC SPATIAL GLOW
       // =========================================================
       ctx.save();
-      // Smooth Ambient Deep Space Glow Gradient across entire screen
+      
+      const isListeningMode = state === HUDState.LISTENING;
+      const isLiveMode = state === HUDState.LIVE;
+      const listenPulse = isListeningMode ? Math.sin(time * 0.005) * 0.5 + 0.5 : 0;
+      
+      // Dynamic Background Radial Gradient
       const bgGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) * 0.85);
-      bgGlow.addColorStop(0, 'rgba(14, 165, 233, 0.22)');
-      bgGlow.addColorStop(0.35, 'rgba(6, 182, 212, 0.10)');
-      bgGlow.addColorStop(0.65, 'rgba(3, 105, 161, 0.04)');
-      bgGlow.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
+      if (isListeningMode) {
+        bgGlow.addColorStop(0, `rgba(6, 182, 212, ${0.35 + listenPulse * 0.25})`);
+        bgGlow.addColorStop(0.35, `rgba(16, 185, 129, ${0.20 + listenPulse * 0.15})`);
+        bgGlow.addColorStop(0.65, 'rgba(3, 105, 161, 0.08)');
+        bgGlow.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
+      } else if (isLiveMode) {
+        bgGlow.addColorStop(0, 'rgba(16, 185, 129, 0.30)');
+        bgGlow.addColorStop(0.35, 'rgba(5, 150, 105, 0.15)');
+        bgGlow.addColorStop(0.65, 'rgba(4, 120, 87, 0.06)');
+        bgGlow.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
+      } else {
+        bgGlow.addColorStop(0, 'rgba(14, 165, 233, 0.22)');
+        bgGlow.addColorStop(0.35, 'rgba(6, 182, 212, 0.10)');
+        bgGlow.addColorStop(0.65, 'rgba(3, 105, 161, 0.04)');
+        bgGlow.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
+      }
 
       ctx.fillStyle = bgGlow;
       ctx.fillRect(0, 0, width, height);
@@ -645,49 +679,74 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       });
 
       // =========================================================
-      // 4. 3D HOLOGRAPHIC QUANTUM CORE ORB & GYROSCOPE RINGS
+      // 4. 3D HOLOGRAPHIC QUANTUM CORE ORB & DYNAMIC AGENT TAKEOVER
       // =========================================================
       ctx.save();
       ctx.translate(centerX, centerY);
 
+      // Determine active highlighted sub-agent for Core Takeover
+      const activeAgent = (activeHighlightAgentId || selectedAgent?.id)
+        ? agentsRef.current.find(a => a.id === activeHighlightAgentId || a.name === activeHighlightAgentId || a.id === selectedAgent?.id)
+        : null;
+
+      // Determine Dynamic Core Color Theme & Labels
+      let coreColor = '#29DFFF'; // Default NEXA Cyan
+      let coreTitle = 'NEXA CORE';
+      let coreStatus = '● ONLINE';
+
+      if (activeAgent) {
+        coreColor = activeAgent.color;
+        coreTitle = activeAgent.name;
+        coreStatus = `● ${activeAgent.role.slice(0, 16).toUpperCase()}`;
+      } else if (state === HUDState.LIVE) {
+        coreColor = '#10B981'; // Neon Emerald Green
+        coreTitle = 'LIVE MODE';
+        coreStatus = '● SYNCED';
+      } else if (state === HUDState.LISTENING) {
+        coreColor = '#06B6D4'; // Cyan-Teal
+        coreTitle = 'LISTENING...';
+        coreStatus = '● VOICE COMMAND';
+      }
+
       // A. Volumetric Outer Plasma Glow Field
       const outerGlowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, activeCoreR * 2.2);
-      outerGlowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      outerGlowGrad.addColorStop(0.2, 'rgba(41, 223, 255, 0.85)');
-      outerGlowGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.4)');
-      outerGlowGrad.addColorStop(0.75, 'rgba(3, 105, 161, 0.12)');
+      outerGlowGrad.addColorStop(0, '#FFFFFF');
+      outerGlowGrad.addColorStop(0.2, coreColor);
+      outerGlowGrad.addColorStop(0.5, coreColor + '55');
+      outerGlowGrad.addColorStop(0.8, coreColor + '15');
       outerGlowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-      ctx.shadowColor = '#29DFFF';
+      ctx.shadowColor = coreColor;
       ctx.shadowBlur = 35 * scaleBase;
       ctx.fillStyle = outerGlowGrad;
       ctx.beginPath();
       ctx.arc(0, 0, activeCoreR * 2.0, 0, Math.PI * 2);
       ctx.fill();
 
-      // A1. Continuous Expanding Slow Pulsing Core Shockwaves (Slowed Down to 0.00015)
+      // A1. Continuous Expanding Core Shockwaves
       for (let i = 0; i < 4; i++) {
-        const waveProgress = ((time * 0.00015) + i * 0.25) % 1;
+        const waveProgress = ((time * 0.00018) + i * 0.25) % 1;
         const waveRadius = activeCoreR * 0.7 + waveProgress * (200 * scaleBase);
         const waveAlpha = Math.max(0, (1 - waveProgress) * 0.55);
 
-        ctx.strokeStyle = `rgba(41, 223, 255, ${waveAlpha})`;
+        ctx.strokeStyle = coreColor;
+        ctx.globalAlpha = waveAlpha;
         ctx.lineWidth = Math.max(0.8, (2.2 - waveProgress * 1.5) * scaleBase);
-        ctx.shadowColor = '#29DFFF';
+        ctx.shadowColor = coreColor;
         ctx.shadowBlur = 12 * (1 - waveProgress);
         ctx.beginPath();
         ctx.arc(0, 0, waveRadius, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1.0;
       }
 
-      // B. 3D Tilting Gyroscope Arc-Reactor Rings (Slower rotations)
-      // Ring 1: Horizontal Orbital Ring
+      // B. 3D Gyroscope Arc-Reactor Rings
       ctx.save();
       ctx.rotate(time * 0.0004);
       ctx.scale(1.0, 0.38);
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2 * scaleBase;
-      ctx.shadowColor = '#00F0FF';
+      ctx.shadowColor = coreColor;
       ctx.shadowBlur = 15;
       ctx.setLineDash([12, 8, 4, 8]);
       ctx.beginPath();
@@ -696,19 +755,18 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // Ring 2: Tilted 45-degree Reverse Orbital Ring
       ctx.save();
       ctx.rotate(-time * 0.0003 + Math.PI / 4);
       ctx.scale(0.42, 1.0);
-      ctx.strokeStyle = 'rgba(41, 223, 255, 0.85)';
+      ctx.strokeStyle = coreColor;
       ctx.lineWidth = 1.5 * scaleBase;
-      ctx.shadowColor = '#29DFFF';
+      ctx.shadowColor = coreColor;
       ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.arc(0, 0, activeCoreR * 1.4, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Orbiting Photon Node on Ring 2
+      // Orbiting Photon Node
       const orbAngle = time * 0.0006;
       const orbX = Math.cos(orbAngle) * activeCoreR * 1.4;
       const orbY = Math.sin(orbAngle) * activeCoreR * 1.4;
@@ -723,7 +781,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       ctx.save();
       ctx.rotate(time * 0.0002);
       const tickCount = 36;
-      ctx.strokeStyle = 'rgba(41, 223, 255, 0.65)';
+      ctx.strokeStyle = coreColor;
       ctx.lineWidth = 1.2 * scaleBase;
       for (let i = 0; i < tickCount; i++) {
         const angle = (i * Math.PI * 2) / tickCount;
@@ -742,9 +800,8 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         0, 0, activeCoreR * 0.85
       );
       innerSphereGrad.addColorStop(0, '#FFFFFF');
-      innerSphereGrad.addColorStop(0.4, '#C0F2FE');
-      innerSphereGrad.addColorStop(0.75, '#29DFFF');
-      innerSphereGrad.addColorStop(1, '#0284C7');
+      innerSphereGrad.addColorStop(0.45, coreColor);
+      innerSphereGrad.addColorStop(1, '#021e2b');
 
       ctx.fillStyle = innerSphereGrad;
       ctx.shadowColor = '#FFFFFF';
@@ -757,20 +814,48 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       ctx.save();
       ctx.textAlign = 'center';
 
-      // Title: NEXA CORE
-      ctx.font = '800 13px Rajdhani, sans-serif';
+      ctx.font = '800 12px Rajdhani, sans-serif';
       ctx.fillStyle = '#FFFFFF';
-      ctx.shadowColor = '#00F0FF';
+      ctx.shadowColor = coreColor;
       ctx.shadowBlur = 10;
-      ctx.fillText('NEXA CORE', 0, -4 * scaleBase);
+      ctx.fillText(coreTitle, 0, -4 * scaleBase);
 
-      // Status Pill: ONLINE
-      ctx.font = '700 9.5px Rajdhani, monospace';
-      ctx.fillStyle = '#29DFFF';
-      ctx.shadowColor = '#29DFFF';
+      ctx.font = '700 9px Rajdhani, monospace';
+      ctx.fillStyle = coreColor;
+      ctx.shadowColor = coreColor;
       ctx.shadowBlur = 8;
-      ctx.fillText('● ONLINE', 0, 14 * scaleBase);
+      ctx.fillText(coreStatus, 0, 14 * scaleBase);
       ctx.restore();
+
+      // F. Concentric Audio Waveform Spectrum Rings (Perfectly centered around 0, 0)
+      const isAudioActive = state === HUDState.SPEAKING || state === HUDState.LISTENING || state === HUDState.LIVE;
+      if (isAudioActive) {
+        ctx.save();
+        const audioVol = smoothedAudioRef.current.vol || (0.35 + Math.sin(time * 0.01) * 0.2);
+        const eqBars = 36;
+        const innerEqR = activeCoreR * 1.6;
+
+        for (let i = 0; i < eqBars; i++) {
+          const angle = (i * Math.PI * 2) / eqBars;
+          const freqAmp = Math.sin(time * 0.008 + i * 0.4) * 0.5 + 0.5;
+          const barHeight = (8 + freqAmp * 24 * audioVol) * scaleBase;
+
+          const x1 = Math.cos(angle) * innerEqR;
+          const y1 = Math.sin(angle) * innerEqR;
+          const x2 = Math.cos(angle) * (innerEqR + barHeight);
+          const y2 = Math.sin(angle) * (innerEqR + barHeight);
+
+          ctx.strokeStyle = coreColor;
+          ctx.shadowColor = coreColor;
+          ctx.shadowBlur = 8;
+          ctx.lineWidth = 1.8 * scaleBase;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       ctx.restore();
 

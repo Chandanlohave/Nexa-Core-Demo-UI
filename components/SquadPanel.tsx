@@ -26,6 +26,9 @@ interface SquadPanelProps {
   onRunAgentTask: (agentName: string, promptText: string) => void;
   activeHighlightAgentId: string | null;
   setActiveHighlightAgentId: (id: string | null) => void;
+  onOpenPipeline?: () => void;
+  onOpenDebate?: () => void;
+  onOpenCustomAgent?: () => void;
 }
 
 export const SquadPanel: React.FC<SquadPanelProps> = ({
@@ -35,6 +38,9 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
   onRunAgentTask,
   activeHighlightAgentId,
   setActiveHighlightAgentId,
+  onOpenPipeline,
+  onOpenDebate,
+  onOpenCustomAgent
 }) => {
   const [isPlayingSequence, setIsPlayingSequence] = useState(false);
   const [playingSingleAgentId, setPlayingSingleAgentId] = useState<string | null>(null);
@@ -127,8 +133,33 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
+            <div className="flex flex-wrap items-center gap-2">
+              {onOpenPipeline && (
+                <button
+                  onClick={onOpenPipeline}
+                  className="px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  ⚡ PIPELINE
+                </button>
+              )}
+              {onOpenDebate && (
+                <button
+                  onClick={onOpenDebate}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/40 text-purple-300 font-mono text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  ⚔️ DEBATE
+                </button>
+              )}
+              {onOpenCustomAgent && (
+                <button
+                  onClick={onOpenCustomAgent}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  🛠️ BUILD CORE
+                </button>
+              )}
+
               {isPlayingSequence || playingSingleAgentId ? (
                 <button
                   onClick={handleStopAll}
@@ -143,7 +174,7 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
                 disabled={isPlayingSequence}
                 className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono text-[11px] sm:text-xs font-bold shadow-lg shadow-cyan-500/20 border border-cyan-400/30 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
               >
-                <Volume2 className="w-3.5 h-3.5 animate-bounce" /> INTRO ALL 6 AGENTS
+                <Volume2 className="w-3.5 h-3.5 animate-bounce" /> INTRO ALL AGENTS
               </button>
             </div>
 

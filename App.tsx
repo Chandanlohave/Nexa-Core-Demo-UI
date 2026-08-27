@@ -8,6 +8,10 @@ import UserSettingsPanel from './components/UserSettingsPanel';
 import StudyHubPanel from './components/StudyHubPanel';
 import ManageAccountsModal from './components/ManageAccountsModal';
 import { SquadPanel } from './components/SquadPanel';
+import { PipelineModal } from './components/PipelineModal';
+import { AgentDebateModal } from './components/AgentDebateModal';
+import { CustomAgentModal } from './components/CustomAgentModal';
+import { MemoryVaultModal } from './components/MemoryVaultModal';
 import { startSquadIntroSequence } from './services/squadService';
 import { GestureController, GestureData } from './components/GestureController';
 import { logoutFirebase } from './services/firebaseConfig';
@@ -41,7 +45,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyHub, onSquad, isOffline }: any) => (
+const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyHub, onSquad, onVault, squadCount = 6, isOffline }: any) => (
     <div className="w-full shrink-0 flex justify-between items-center px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 min-h-[56px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
         <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2">
@@ -56,12 +60,20 @@ const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyH
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+            {onVault && (
+                <button
+                    onClick={onVault}
+                    className="px-2.5 py-1 rounded-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-mono text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                    🧠 VAULT
+                </button>
+            )}
             <button 
                 onClick={onSquad} 
                 className="px-2.5 py-1 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
             >
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                6 SQUAD
+                {squadCount} SQUAD
             </button>
             <button onClick={onStudyHub} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative cursor-pointer">
                 <StudyIcon />
@@ -229,6 +241,18 @@ const App: React.FC = () => {
     const [showStudyHub, setShowStudyHub] = useState(false);
     const [showAccounts, setShowAccounts] = useState(false);
     const [showSquad, setShowSquad] = useState(false);
+    const [showPipeline, setShowPipeline] = useState(false);
+    const [showDebate, setShowDebate] = useState(false);
+    const [showCustomAgent, setShowCustomAgent] = useState(false);
+    const [showMemoryVault, setShowMemoryVault] = useState(false);
+
+    const [customAgents, setCustomAgents] = useState<any[]>(() => {
+        try {
+            const saved = localStorage.getItem('nexa_custom_agents');
+            return saved ? JSON.parse(saved) : [];
+        } catch(e) { return []; }
+    });
+
     const [activeHighlightAgentId, setActiveHighlightAgentId] = useState<string | null>(null);
     
     const [liveSession, setLiveSession] = useState<LiveSessionManager | null>(null);
@@ -721,6 +745,8 @@ const App: React.FC = () => {
                         onSettings={handleSettingsClick} 
                         onStudyHub={() => setShowStudyHub(true)} 
                         onSquad={() => setShowSquad(true)}
+                        onVault={() => setShowMemoryVault(true)}
+                        squadCount={6 + customAgents.length}
                         isOffline={!navigator.onLine} 
                     />
                     
@@ -735,6 +761,7 @@ const App: React.FC = () => {
                                 gestureData={gestureData}
                                 visualMode="NEBULA"
                                 activeHighlightAgentId={activeHighlightAgentId}
+                                customAgents={customAgents}
                                 onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
                             />
                         </div>
@@ -812,7 +839,48 @@ const App: React.FC = () => {
                         }}
                         activeHighlightAgentId={activeHighlightAgentId}
                         setActiveHighlightAgentId={setActiveHighlightAgentId}
+                        onOpenPipeline={() => { setShowSquad(false); setShowPipeline(true); }}
+                        onOpenDebate={() => { setShowSquad(false); setShowDebate(true); }}
+                        onOpenCustomAgent={() => { setShowSquad(false); setShowCustomAgent(true); }}
                     />
+
+                    {showPipeline && (
+                        <PipelineModal
+                            user={user}
+                            agents={customAgents.length > 0 ? [...customAgents] : []}
+                            onClose={() => setShowPipeline(false)}
+                            onAgentHighlight={(id) => setActiveHighlightAgentId(id)}
+                        />
+                    )}
+
+                    {showDebate && (
+                        <AgentDebateModal
+                            user={user}
+                            agents={customAgents.length > 0 ? [...customAgents] : []}
+                            onClose={() => setShowDebate(false)}
+                            onAgentHighlight={(id) => setActiveHighlightAgentId(id)}
+                        />
+                    )}
+
+                    {showCustomAgent && (
+                        <CustomAgentModal
+                            onClose={() => setShowCustomAgent(false)}
+                            onAddAgent={(newAgent) => {
+                                const updated = [...customAgents, newAgent];
+                                setCustomAgents(updated);
+                                try {
+                                    localStorage.setItem('nexa_custom_agents', JSON.stringify(updated));
+                                } catch(e) {}
+                            }}
+                        />
+                    )}
+
+                    {showMemoryVault && (
+                        <MemoryVaultModal
+                            user={user}
+                            onClose={() => setShowMemoryVault(false)}
+                        />
+                    )}
                 </>
             )}
         </div>
