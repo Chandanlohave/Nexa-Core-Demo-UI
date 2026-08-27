@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
-import { UserProfile, UserRole } from "../types";
+import { UserProfile, UserRole, VoiceKey } from "../types";
 import { getRigidIntro, getCurrentLocation, isUserBhabhi, generateIntroductoryMessage, controlAppTool, modifyCodeTool, getFormattedTimeContext, forceFemaleHindi } from "./geminiService";
 import { getMemoryForPrompt, getFacts, syncMemoryWithCloud } from "./memoryService";
 
@@ -265,8 +265,8 @@ export class LiveSessionManager {
             config: {
                 systemInstruction: systemInstruction,
                 responseModalities: [Modality.AUDIO],
-                inputAudioTranscription: {},
-                outputAudioTranscription: {},
+                inputAudioTranscription: { languageCodes: ['en-IN'] },
+                outputAudioTranscription: { languageCodes: ['en-IN'] },
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } } },
                 tools: [{ functionDeclarations: [controlAppTool, modifyCodeTool] }]
             },
@@ -407,11 +407,12 @@ export class LiveSessionManager {
   
   private async handleSessionMessage(message: LiveServerMessage): Promise<void> {
       if (message.serverContent?.inputTranscription) {
-          const text = message.serverContent.inputTranscription.text;
-          this.currentInputTranscription += text;
-          
-          if (text.trim().length > 0) { this.interruptPlayback(); }
-
+          let text = message.serverContent.inputTranscription.text;
+          if (text) {
+              text = text.replace(/alexa/gi, "Nexa");
+              this.currentInputTranscription += text;
+              if (text.trim().length > 0) { this.interruptPlayback(); }
+          }
           this.callbacks.onTranscriptionUpdate(this.currentInputTranscription, this.currentOutputTranscription);
           
           const lowerText = this.currentInputTranscription.toLowerCase();
@@ -425,7 +426,7 @@ export class LiveSessionManager {
 
       if (message.serverContent?.interrupted) { this.interruptPlayback(); return; }
 
-      if (message.toolCall) {
+      if (message.toolCall?.functionCalls) {
           for (const fc of message.toolCall.functionCalls) {
               if (fc.name === 'controlApp') {
                   const args = fc.args as any;
@@ -441,9 +442,11 @@ export class LiveSessionManager {
 
       if (message.serverContent?.outputTranscription) {
           const rawText = message.serverContent.outputTranscription.text;
-          const fixedText = forceFemaleHindi(rawText);
-          this.currentOutputTranscription += fixedText;
-          this.callbacks.onTranscriptionUpdate(this.currentInputTranscription, this.currentOutputTranscription);
+          if (rawText) {
+              const fixedText = forceFemaleHindi(rawText);
+              this.currentOutputTranscription += fixedText;
+              this.callbacks.onTranscriptionUpdate(this.currentInputTranscription, this.currentOutputTranscription);
+          }
       }
 
       if (message.serverContent?.modelTurn?.parts && this.outputAudioContext) {

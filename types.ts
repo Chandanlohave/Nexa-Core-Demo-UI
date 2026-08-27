@@ -4,23 +4,59 @@ export enum UserRole {
   USER = 'USER'
 }
 
-// REMOVED MALE VOICES. ONLY FEMALE VOICES KEPT.
 export const VOICES = {
   Aoede: { 
     name: 'Aoede', 
-    description: 'Sweet & Energetic', 
+    description: 'Sweet & Energetic (Female)', 
     gender: 'Female', 
     style: 'Sweet, bright, energetic, youthful female voice.' 
   },
   Kore: { 
     name: 'Kore', 
-    description: 'Calm & Soft', 
+    description: 'Calm & Soft (Female)', 
     gender: 'Female', 
     style: 'Soothing, soft, clear, natural female voice.' 
+  },
+  Fenrir: {
+    name: 'Fenrir',
+    description: 'Deep & Authoritative (Male)',
+    gender: 'Male',
+    style: 'Deep, confident, commanding, analytical male voice.'
+  },
+  Charon: {
+    name: 'Charon',
+    description: 'Techy & Precise (Male)',
+    gender: 'Male',
+    style: 'Focused, techy, quick-paced, precise male developer voice.'
+  },
+  Puck: {
+    name: 'Puck',
+    description: 'Friendly & Energetic (Male)',
+    gender: 'Male',
+    style: 'Upbeat, friendly, clear, dynamic male voice.'
   }
 } as const;
 
 export type VoiceKey = keyof typeof VOICES;
+
+export interface NexaAgentNode {
+  id: string;
+  name: string;
+  role: string;
+  specialty: string;
+  status: string;
+  metric: string;
+  color: string;
+  voice: VoiceKey;
+  voiceGender: 'Male' | 'Female';
+  x: number;
+  y: number;
+  z: number;
+  connections: number[];
+  pulseOffset: number;
+  activityLevel: number;
+  introText: string;
+}
 
 export interface UserProfile {
   name: string;
@@ -48,7 +84,7 @@ export interface MapLocation {
 }
 
 // --- WIDGET TYPES ---
-export type WidgetType = 'WEATHER' | 'FINANCE' | 'NEWS' | 'CODE';
+export type WidgetType = 'WEATHER' | 'FINANCE' | 'NEWS' | 'CODE' | 'BUSINESS_STRATEGY' | 'TASK_OPERATIONS';
 
 export interface WidgetPayload {
   type: WidgetType;
@@ -139,6 +175,8 @@ export type ActionType =
   | 'LOGOUT'
   | 'MODIFY_CODE' // NEW: Self-Programming Action
   | 'SET_REMINDER' // NEW: Reminder Action
+  | 'ANALYZE_BUSINESS_DATA' // Track 2: Business Decision Intelligence
+  | 'ORGANIZE_TASKS' // Track 3: Operational AI Agent Automation
   | 'NONE';
 
 export interface AgentResponse {

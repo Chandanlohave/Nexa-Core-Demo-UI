@@ -7,15 +7,19 @@ import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
 import StudyHubPanel from './components/StudyHubPanel';
 import ManageAccountsModal from './components/ManageAccountsModal';
+import { SquadPanel } from './components/SquadPanel';
+import { startSquadIntroSequence } from './services/squadService';
 import { GestureController, GestureData } from './components/GestureController';
+import { logoutFirebase } from './services/firebaseConfig';
 import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig, StudyHubSubject, ActionType, VoiceKey, Reminder } from './types';
-import { generateTextResponse, generateTutorLesson, generateImageContent, generateVideoContent, editImageContent, isUserBhabhi, generateTopicContent, generateIntroductoryMessage } from './services/geminiService';
+import { generateTutorLesson, generateImageContent, generateVideoContent, editImageContent, isUserBhabhi, generateTopicContent, generateIntroductoryMessage } from './services/geminiService';
 import { playMicOnSound, playErrorSound, playAdminLoginSound } from './services/audioService';
 import { appendMessageToMemory, clearAllMemory, clearAdminNotifications, getLocalMessages, logAdminNotification, syncUserProfile, fetchSystemConfig, syncMemoryWithCloud, getAdminNotifications, getUserProfile, syncFamilyTree } from './services/memoryService';
 import { speak as speakTextTTS, stop as stopTextTTS } from './services/ttsService';
 import { LiveSessionManager } from './services/liveService';
 import { analyzeSystemError, RepairPlan } from './services/selfRepairService';
-import { identifyTargetFile, fetchFileContent, generateCodePatch, pushToGithub, getRobustGithubConfig, revertLastChange } from './services/githubService';
+import { getRobustGithubConfig, revertLastChange } from './services/githubService';
+import { NexaCoreController } from './core/NexaCoreController';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
@@ -37,32 +41,39 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyHub, isOffline }: any) => (
-    <div className="w-full shrink-0 flex justify-between items-center px-6 pt-[max(1rem,env(safe-area-inset-top))] pb-2 min-h-[64px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
-        <div className="flex items-center gap-4">
-            <div className="flex flex-col items-start">
-                <div className="text-[10px] text-nexa-cyan font-mono tracking-widest uppercase">{userName}</div>
-                <div className="flex gap-1 mt-1"><div className="w-8 h-1 bg-nexa-cyan shadow-[0_0_5px_currentColor]"></div><div className="w-2 h-1 bg-nexa-cyan/50"></div><div className="w-1 h-1 bg-nexa-cyan/20"></div></div>
+const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyHub, onSquad, isOffline }: any) => (
+    <div className="w-full shrink-0 flex justify-between items-center px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 min-h-[56px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
+        <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2">
+                <div className="text-lg font-bold tracking-[0.25em] text-zinc-900 dark:text-white drop-shadow-[0_0_10px_rgba(41,223,255,0.6)]">NEXA</div>
+                <div className="hidden xs:block text-[9px] text-nexa-cyan font-mono tracking-widest uppercase border-l border-cyan-500/30 pl-2">{userName}</div>
             </div>
             {isOffline ? (
-                <div className="text-[9px] font-mono text-red-500 border-l border-red-500 pl-4 animate-pulse">OFFLINE MODE</div>
+                <div className="text-[9px] font-mono text-red-500 border-l border-red-500 pl-2 animate-pulse">OFFLINE</div>
             ) : (
-                latency !== null && (<div className="hidden sm:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-4">API LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)
+                latency !== null && (<div className="hidden md:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-2">LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)
             )}
         </div>
-        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none mt-[env(safe-area-inset-top)]"><div className="text-xl font-bold tracking-[0.3em] text-zinc-900 dark:text-white/90 drop-shadow-[0_0_10px_rgba(41,223,255,0.5)]">NEXA</div></div>
-        <div className="flex items-center gap-4">
-            <button onClick={onStudyHub} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative">
-                <StudyIcon />
-                <span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">STUDY BUDDY</span>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+            <button 
+                onClick={onSquad} 
+                className="px-2.5 py-1 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
+            >
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                6 SQUAD
             </button>
-            <button onClick={onSettings} className="p-2 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors relative group">
+            <button onClick={onStudyHub} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative cursor-pointer">
+                <StudyIcon />
+                <span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">STUDY BUDDY</span>
+            </button>
+            <button onClick={onSettings} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors relative group cursor-pointer">
                 <GearIcon />
                 {userRole === UserRole.ADMIN && (
                     <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                 )}
             </button>
-            <button onClick={onLogout} className="p-2 hover:bg-red-500/10 rounded-full transition-colors"><LogoutIcon /></button>
+            <button onClick={onLogout} className="p-1.5 hover:bg-red-500/10 rounded-full transition-colors cursor-pointer"><LogoutIcon /></button>
         </div>
     </div>
 );
@@ -184,45 +195,6 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
     );
 };
 
-const MODIFIABLE_FILES = [
-  'index.tsx',
-  'App.tsx',
-  'types.ts',
-  'index.html',
-  'components/Auth.tsx',
-  'components/HUD.tsx',
-  'components/NebulaOrb.tsx',
-  'components/GestureController.tsx',
-  'components/ChatPanel.tsx',
-  'components/AdminPanel.tsx',
-  'components/UserSettingsPanel.tsx',
-  'components/StudyHubPanel.tsx',
-  'components/ManageAccountsModal.tsx',
-  'components/CrashScreen.tsx',
-  'components/ErrorBoundary.tsx',
-  'components/InstallPWAButton.tsx',
-  'services/geminiService.ts',
-  'services/liveService.ts',
-  'services/memoryService.ts',
-  'services/ttsService.ts',
-  'services/githubService.ts',
-  'services/selfRepairService.ts',
-  'services/audioService.ts',
-  'services/firebaseConfig.ts',
-  'services/wakeWordService.ts',
-  'vite.config.ts',
-  'tsconfig.json',
-  'package.json',
-  'manifest.json',
-  'metadata.json',
-  'capacitor.config.ts',
-  'service-worker.js',
-  'netlify.toml',
-  'firebase.json',
-  'vercel.json',
-  'README.md'
-];
-
 const App: React.FC = () => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [hudState, setHudState] = useState<HUDState>(HUDState.IDLE);
@@ -256,6 +228,8 @@ const App: React.FC = () => {
     const [showSettings, setShowSettings] = useState(false);
     const [showStudyHub, setShowStudyHub] = useState(false);
     const [showAccounts, setShowAccounts] = useState(false);
+    const [showSquad, setShowSquad] = useState(false);
+    const [activeHighlightAgentId, setActiveHighlightAgentId] = useState<string | null>(null);
     
     const [liveSession, setLiveSession] = useState<LiveSessionManager | null>(null);
     const [isCameraActive, setIsCameraActive] = useState(false);
@@ -287,6 +261,52 @@ const App: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const cameraStreamRef = useRef<MediaStream | null>(null);
     const gestureCtrlRef = useRef<any>(null);
+
+    const callbacksRef = useRef({
+        speakText: (text: string) => Promise.resolve(),
+        handleLogout: () => {},
+        setConfig: (c: any) => {},
+        setShowAdmin: (show: boolean) => {},
+        setShowSquad: (show: boolean) => {},
+        userRole: UserRole.USER as UserRole
+    });
+
+    const coreController = React.useMemo(() => {
+        return new NexaCoreController(config, {
+            onStateChange: setHudState,
+            onMessageAdded: (msg) => setMessages(prev => [...prev, msg]),
+            onSpeak: (text: string) => callbacksRef.current.speakText(text),
+            onAction: (action: ActionType, params: any) => {
+                switch(action) {
+                    case 'LOGOUT': callbacksRef.current.handleLogout(); break;
+                    case 'THEME_DARK': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'dark'})); break;
+                    case 'THEME_LIGHT': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'light'})); break;
+                    case 'OPEN_ADMIN_PANEL': if(callbacksRef.current.userRole === UserRole.ADMIN) callbacksRef.current.setShowAdmin(true); break;
+                    case 'OPEN_SQUAD_PANEL': callbacksRef.current.setShowSquad(true); break;
+                    case 'INTRODUCE_SQUAD': 
+                        callbacksRef.current.setShowSquad(true); 
+                        if (user) {
+                            startSquadIntroSequence(
+                                user, 
+                                (agentId) => setActiveHighlightAgentId(agentId), 
+                                () => setActiveHighlightAgentId(null)
+                            );
+                        }
+                        break;
+                }
+            },
+            onReloadRequested: () => window.location.reload()
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        coreController.setConfig(config);
+    }, [config, coreController]);
+
+    useEffect(() => {
+        coreController.setUser(user);
+    }, [user, coreController]);
 
     const setCameraState = (active: boolean) => {
         setIsCameraActive(active);
@@ -556,80 +576,12 @@ const App: React.FC = () => {
         }
     };
 
-    const processUserInput = async (text: string, file: { name: string; type: 'image' | 'text'; data: string; mimeType?: string } | null) => {
-        if (!user) return;
-        setHudState(HUDState.THINKING);
-        
-        let displayImage = undefined;
-        if (file && file.type === 'image') {
-            displayImage = `data:${file.mimeType || 'image/jpeg'};base64,${file.data}`;
-        }
-        
-        let displayText = text;
-        if (file && file.type === 'text') {
-            displayText += `\n[Attached: ${file.name}]`;
-        }
-
-        const userMsg: ChatMessage = { role: 'user', text: displayText, timestamp: Date.now(), image: displayImage };
-        setMessages(prev => [...prev, userMsg]);
-        appendMessageToMemory(user, userMsg);
-        
-        try {
-            const response = await generateTextResponse(text, user, config.naughtyModeOverride, file);
-            if (response.action && response.action !== 'NONE') {
-                handleAction(response.action, response.actionParams);
-            }
-            
-            const modelMsg: ChatMessage = { role: 'model', text: response.text, timestamp: Date.now(), widget: response.widget };
-            setMessages(prev => [...prev, modelMsg]);
-            appendMessageToMemory(user, modelMsg);
-            
-            if (response.text) {
-                await speakText(response.text);
-            } else {
-                setHudState(HUDState.IDLE);
-            }
-        } catch (e) {
-            console.error(e);
-            setHudState(HUDState.IDLE);
-            setTimeout(() => setHudState(HUDState.IDLE), 2000);
-        }
+    const processUserInput = (text: string, file: { name: string; type: 'image' | 'text'; data: string; mimeType?: string } | null) => {
+        coreController.processUserInput(text, file);
     };
     
-    const handleAction = async (action: ActionType, params: any) => {
-        switch(action) {
-            case 'LOGOUT': handleLogout(); break;
-            case 'THEME_DARK': setConfig(c => ({...c, theme: 'dark'})); break;
-            case 'THEME_LIGHT': setConfig(c => ({...c, theme: 'light'})); break;
-            case 'OPEN_ADMIN_PANEL': if(user?.role === UserRole.ADMIN) setShowAdmin(true); break;
-            case 'MODIFY_CODE': 
-                setHudState(HUDState.CODING);
-                setTimeout(async () => {
-                    try {
-                        const targetFile = await identifyTargetFile(params.request, MODIFIABLE_FILES); 
-                        if(targetFile) {
-                            await speakText(`Target identified: ${targetFile}. Accessing file content.`);
-                            const current = await fetchFileContent(targetFile) || { content: "", sha: undefined };
-                            
-                            await speakText("Generating code patch. This may take a moment.");
-                            const patch = await generateCodePatch(current.content, params.request, targetFile);
-                            
-                            await speakText("Code generated. Pushing update to the repository.");
-                            await pushToGithub(targetFile, patch, current.sha, params.request);
-                            
-                            await speakText("Code update successful. Reloading the application now.");
-                            setTimeout(() => window.location.reload(), 3000);
-                            return; 
-                        }
-                        throw new Error("Target file could not be identified.");
-                    } catch(e: any) {
-                        console.error("Phoenix Protocol failed:", e);
-                        await speakText(`Code modification failed. Error: ${e.message}`);
-                        setHudState(HUDState.IDLE); 
-                    }
-                }, 100);
-                break;
-        }
+    const handleAction = (action: ActionType, params: any) => {
+        coreController.executeAction(action, params);
     };
 
     const handleLogout = () => {
@@ -638,6 +590,7 @@ const App: React.FC = () => {
             cleanupCamera();
             setLiveSession(null);
         }
+        logoutFirebase().catch(() => {});
         setUser(null);
         localStorage.removeItem('nexa_user');
         setMessages([]);
@@ -648,6 +601,15 @@ const App: React.FC = () => {
         if (user?.role === UserRole.ADMIN) setShowAdmin(true);
         else setShowSettings(true);
     };
+
+    useEffect(() => {
+        callbacksRef.current.speakText = speakText;
+        callbacksRef.current.handleLogout = handleLogout;
+        callbacksRef.current.setConfig = setConfig;
+        callbacksRef.current.setShowAdmin = setShowAdmin;
+        callbacksRef.current.setShowSquad = setShowSquad;
+        callbacksRef.current.userRole = user?.role || UserRole.USER;
+    });
 
     return (
         <div className="w-screen h-[100dvh] flex flex-col overflow-hidden bg-zinc-100 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300 fixed inset-0">
@@ -758,6 +720,7 @@ const App: React.FC = () => {
                         onLogout={handleLogout} 
                         onSettings={handleSettingsClick} 
                         onStudyHub={() => setShowStudyHub(true)} 
+                        onSquad={() => setShowSquad(true)}
                         isOffline={!navigator.onLine} 
                     />
                     
@@ -771,6 +734,7 @@ const App: React.FC = () => {
                                 ecoMode={config.ecoMode} 
                                 gestureData={gestureData}
                                 visualMode="NEBULA"
+                                activeHighlightAgentId={activeHighlightAgentId}
                                 onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
                             />
                         </div>
@@ -838,6 +802,17 @@ const App: React.FC = () => {
                          setShowStudyHub(false);
                     }} />
                     <ManageAccountsModal isOpen={showAccounts} onClose={() => setShowAccounts(false)} />
+                    <SquadPanel 
+                        isOpen={showSquad} 
+                        onClose={() => setShowSquad(false)} 
+                        user={user} 
+                        onRunAgentTask={(agentName, prompt) => {
+                            processUserInput(`[AGENT ${agentName}] ${prompt}`, null);
+                            setShowChat(true);
+                        }}
+                        activeHighlightAgentId={activeHighlightAgentId}
+                        setActiveHighlightAgentId={setActiveHighlightAgentId}
+                    />
                 </>
             )}
         </div>

@@ -285,6 +285,74 @@ export const speak = async (user: UserProfile, text: string, naughtyModeOverride
     return generateAndPlay(user, text, null, naughtyModeOverride, onStart, onEnd);
 };
 
+export const speakAgentText = async (
+    user: UserProfile,
+    text: string,
+    voiceKey: VoiceKey,
+    voiceGender: 'Male' | 'Female',
+    onStart: () => void,
+    onEnd: () => void
+) => {
+    stop();
+    const mySessionId = currentSessionId;
+
+    initAudioContext();
+    if (!audioCtx) {
+        if (mySessionId === currentSessionId) onEnd();
+        return;
+    }
+    if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch (e) {}
+    }
+    if (mySessionId !== currentSessionId) return;
+
+    let pronunciationText = text.replace(/Chandan/gi, "चंदन").replace(/Lohave/gi, "लोहवे").replace(/NEXA/gi, "Nexa");
+    const voiceData = VOICES[voiceKey] || VOICES['Aoede'];
+
+    const voiceInstruction = voiceGender === 'Male' 
+        ? `Perform in a confident, clear ${voiceData.description}. Pitch: Male. Tone: ${voiceData.style}`
+        : `Perform in a natural, sweet ${voiceData.description}. Pitch: Female. Tone: ${voiceData.style}`;
+
+    const ttsPrompt = `
+    TEXT: "${pronunciationText}"
+    INSTRUCTIONS:
+    1. ${voiceInstruction}
+    2. ACCENT: Indian English / Hinglish.
+    3. SPEAKING PACE: Calm, steady, professional conversational pace. Pause at commas.
+    `;
+
+    try {
+        const apiKey = checkApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+
+        const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-tts-preview",
+            contents: [{ parts: [{ text: ttsPrompt }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceKey } } },
+            },
+        });
+
+        if (mySessionId !== currentSessionId) return;
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!base64Audio) throw new Error("No agent audio data");
+
+        const audioBytes = decodeBase64(base64Audio);
+        const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
+
+        if (mySessionId !== currentSessionId) return;
+
+        playAudioBuffer(audioBuffer, mySessionId, onStart, onEnd);
+    } catch (e) {
+        console.warn("Agent TTS error, falling back:", e);
+        if (mySessionId === currentSessionId) {
+            onEnd();
+        }
+    }
+};
+
 export const stop = (): void => {
     currentSessionId++;
     if (currentSource) {

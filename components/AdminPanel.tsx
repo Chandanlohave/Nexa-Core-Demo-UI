@@ -16,6 +16,7 @@ interface AdminPanelProps {
   onDeleteReminder?: (id: string) => void;
   onAddReminder?: (text: string) => void;
   onRevertCode?: () => void;
+  onVoiceChange?: (v: VoiceKey) => void;
 }
 
 // REMOVED RED (Warning) & GREEN (Code)

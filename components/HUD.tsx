@@ -12,6 +12,7 @@ interface HUDProps {
   ecoMode?: boolean; // New prop for battery saving
   gestureData?: GestureData;
   visualMode?: 'NEBULA' | 'CLASSIC';
+  activeHighlightAgentId?: string | null;
   onResetZoom?: () => void;
 }
 
@@ -389,6 +390,7 @@ const HUD: React.FC<HUDProps> = React.memo(({
   ecoMode = false,
   gestureData,
   visualMode = 'NEBULA',
+  activeHighlightAgentId,
   onResetZoom
 }) => {
   if (visualMode === 'NEBULA' && state !== HUDState.CODING) {
@@ -401,6 +403,7 @@ const HUD: React.FC<HUDProps> = React.memo(({
           accentColor={accentColor}
           ecoMode={ecoMode}
           gestureData={gestureData}
+          activeHighlightAgentId={activeHighlightAgentId}
           onResetZoom={onResetZoom}
         />
       </div>

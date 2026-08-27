@@ -4,10 +4,21 @@ import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
 import { syncUserProfile, getUserProfile, fetchSystemConfig, verifyAdminPassword, verifyMasterAccessKey } from '../services/memoryService';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, onAuthChange } from '../services/firebaseConfig';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
 }
+
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24">
+    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.15C3.26 21.3 7.31 24 12 24z"/>
+    <path fill="#FBBC05" d="M5.28 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.39l3.99-3.15z"/>
+    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.61l3.99 3.15c.95-2.85 3.6-4.96 6.72-4.96z"/>
+  </svg>
+);
+
 
 // --- HELPER COMPONENTS ---
 const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoFocus, variant = 'cyan', className = '' }: any) => {
@@ -86,8 +97,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       catch (e) { return ''; }
   };
 
+  const [authMethod, setAuthMethod] = useState<'ACCESS_CODE' | 'FIREBASE_EMAIL'>('ACCESS_CODE');
+  const [emailMode, setEmailMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     mobile: '', 
     gender: 'male',
     password: '',
@@ -99,7 +114,84 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
   const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
-  const [isBlacklisted, setIsBlacklisted] = useState(false); // New State
+  const [isBlacklisted, setIsBlacklisted] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (fbUser) => {
+      if (fbUser && mode === 'INIT') {
+        const userId = fbUser.phoneNumber || fbUser.uid.replace(/[^0-9]/g, '').slice(0, 10) || '9999999999';
+        const existingProfile = await getUserProfile(userId);
+        if (existingProfile) {
+          completeLogin(existingProfile);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [mode]);
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError('');
+    const { user: fbUser, error: authError } = await signInWithGoogle();
+    if (authError || !fbUser) {
+      setLoading(false);
+      playErrorSound();
+      setError(`// FIREBASE AUTH ERROR: ${authError || 'Google Sign-In failed'}`);
+      return;
+    }
+
+    const userId = fbUser.phoneNumber || fbUser.uid.replace(/[^0-9]/g, '').slice(0, 10) || '9999999999';
+    const existingProfile = await getUserProfile(userId);
+
+    const profile: UserProfile = existingProfile || {
+      name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Nexa User',
+      mobile: userId,
+      role: UserRole.USER,
+      gender: 'male',
+      warningCount: 0,
+      voice: 'Kore'
+    };
+
+    await syncUserProfile(profile);
+    completeLogin(profile);
+  };
+
+  const handleEmailAuth = async () => {
+    if (!formData.email.trim() || !formData.password.trim()) {
+      playErrorSound();
+      setError('// ERROR: EMAIL AND PASSWORD REQUIRED');
+      return;
+    }
+    setLoading(true);
+    setError('');
+
+    const res = emailMode === 'REGISTER'
+      ? await signUpWithEmail(formData.email.trim(), formData.password.trim())
+      : await signInWithEmail(formData.email.trim(), formData.password.trim());
+
+    if (res.error || !res.user) {
+      setLoading(false);
+      playErrorSound();
+      setError(`// FIREBASE AUTH ERROR: ${res.error || 'Authentication failed'}`);
+      return;
+    }
+
+    const userId = res.user.uid.replace(/[^0-9]/g, '').slice(0, 10) || '9999999999';
+    const existingProfile = await getUserProfile(userId);
+
+    const profile: UserProfile = existingProfile || {
+      name: formData.name.trim() || res.user.email?.split('@')[0] || 'Nexa User',
+      mobile: userId,
+      role: UserRole.USER,
+      gender: formData.gender as 'male' | 'female' | 'other',
+      warningCount: 0,
+      voice: 'Kore'
+    };
+
+    await syncUserProfile(profile);
+    completeLogin(profile);
+  };
+
 
   // Check connectivity options
   const hasCustomKey = !!getStoredKey();
@@ -330,30 +422,95 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
               {mode === 'USER_CREATE' && (
                 <div className="animate-slide-up space-y-3">
-                  <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-6">IDENTIFY YOURSELF</div></div>
+                  <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-2">IDENTIFY YOURSELF</div></div>
                   
-                  <BracketInput name="name" placeholder="ENTER NAME" value={formData.name} onChange={handleChange} autoFocus />
-                  <BracketInput name="mobile" placeholder="ENTER 10-DIGIT MOBILE" type="tel" value={formData.mobile} onChange={handleChange} />
-                  
-                  {/* Access Key Input - Auto-filled if saved */}
-                  <BracketInput name="accessKey" placeholder="ACCESS CODE (REQUIRED)" type="password" value={formData.accessKey} onChange={handleChange} />
+                  {/* Google Sign-In with Firebase */}
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-nexa-cyan/40 hover:border-nexa-cyan text-white text-xs font-mono tracking-wider font-semibold rounded flex items-center justify-center gap-3 transition-all cursor-pointer"
+                  >
+                    <GoogleIcon />
+                    <span>SIGN IN WITH GOOGLE</span>
+                  </button>
 
-                  <div className="flex items-center justify-center gap-4 py-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan" />
-                        <span className="text-xs font-mono text-zinc-400">MALE</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan" />
-                        <span className="text-xs font-mono text-zinc-400">FEMALE</span>
-                    </label>
+                  <div className="flex items-center gap-2 my-2">
+                    <div className="flex-1 h-[1px] bg-zinc-700/50"></div>
+                    <span className="text-[9px] font-mono text-zinc-500">OR AUTHENTICATE</span>
+                    <div className="flex-1 h-[1px] bg-zinc-700/50"></div>
                   </div>
 
-                  <div className="pt-4">
-                      <CyberButton onClick={handleUserCreate} label="INITIALIZE PROFILE" loading={loading} />
+                  <div className="flex justify-center gap-2 mb-2">
+                    <button
+                      onClick={() => setAuthMethod('ACCESS_CODE')}
+                      className={`px-3 py-1 text-[9px] font-mono tracking-widest border transition-all ${authMethod === 'ACCESS_CODE' ? 'border-nexa-cyan bg-nexa-cyan/20 text-nexa-cyan' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      ACCESS CODE
+                    </button>
+                    <button
+                      onClick={() => setAuthMethod('FIREBASE_EMAIL')}
+                      className={`px-3 py-1 text-[9px] font-mono tracking-widest border transition-all ${authMethod === 'FIREBASE_EMAIL' ? 'border-nexa-cyan bg-nexa-cyan/20 text-nexa-cyan' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      FIREBASE EMAIL
+                    </button>
                   </div>
 
-                  <div className="pt-4 space-y-4">
+                  {authMethod === 'FIREBASE_EMAIL' ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-center gap-4 text-[10px] font-mono text-zinc-400 mb-1">
+                        <button 
+                          onClick={() => setEmailMode('LOGIN')}
+                          className={emailMode === 'LOGIN' ? 'text-nexa-cyan font-bold underline' : 'hover:text-white'}
+                        >
+                          SIGN IN
+                        </button>
+                        <span>|</span>
+                        <button 
+                          onClick={() => setEmailMode('REGISTER')}
+                          className={emailMode === 'REGISTER' ? 'text-nexa-cyan font-bold underline' : 'hover:text-white'}
+                        >
+                          CREATE ACCOUNT
+                        </button>
+                      </div>
+
+                      {emailMode === 'REGISTER' && (
+                        <BracketInput name="name" placeholder="ENTER NAME" value={formData.name} onChange={handleChange} autoFocus />
+                      )}
+                      <BracketInput name="email" placeholder="ENTER EMAIL ADDRESS" type="email" value={formData.email} onChange={handleChange} autoFocus={emailMode === 'LOGIN'} />
+                      <BracketInput name="password" placeholder="ENTER PASSWORD" type="password" value={formData.password} onChange={handleChange} />
+
+                      <div className="pt-2">
+                        <CyberButton 
+                          onClick={handleEmailAuth} 
+                          label={emailMode === 'LOGIN' ? 'FIREBASE SIGN IN' : 'CREATE FIREBASE ACCOUNT'} 
+                          loading={loading} 
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <BracketInput name="name" placeholder="ENTER NAME" value={formData.name} onChange={handleChange} autoFocus />
+                      <BracketInput name="mobile" placeholder="ENTER 10-DIGIT MOBILE" type="tel" value={formData.mobile} onChange={handleChange} />
+                      <BracketInput name="accessKey" placeholder="ACCESS CODE (REQUIRED)" type="password" value={formData.accessKey} onChange={handleChange} />
+
+                      <div className="flex items-center justify-center gap-4 py-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="gender" value="male" checked={formData.gender === 'male'} onChange={handleChange} className="accent-nexa-cyan" />
+                            <span className="text-xs font-mono text-zinc-400">MALE</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="gender" value="female" checked={formData.gender === 'female'} onChange={handleChange} className="accent-nexa-cyan" />
+                            <span className="text-xs font-mono text-zinc-400">FEMALE</span>
+                        </label>
+                      </div>
+
+                      <div className="pt-2">
+                          <CyberButton onClick={handleUserCreate} label="INITIALIZE PROFILE" loading={loading} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-3 space-y-4">
                       <div className="flex justify-between items-center text-center mt-2 px-1">
                           <button onClick={() => setMode('INIT')} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors flex items-center gap-1 group"><span className="group-hover:-translate-x-1 transition-transform">&lt;&lt;</span> BACK</button>
                           <button onClick={switchToAdmin} className="text-[9px] text-zinc-500 hover:text-nexa-cyan font-mono tracking-widest uppercase transition-colors">// Admin Console</button>

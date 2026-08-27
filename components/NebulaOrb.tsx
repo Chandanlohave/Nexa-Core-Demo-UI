@@ -45,6 +45,7 @@ interface NebulaOrbProps {
   accentColor?: string;
   ecoMode?: boolean;
   gestureData?: GestureData;
+  activeHighlightAgentId?: string | null;
   onSelectAgent?: (agent: NexaAgentNode) => void;
   onResetZoom?: () => void;
 }
@@ -56,6 +57,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
   accentColor = '#29DFFF',
   ecoMode = false,
   gestureData,
+  activeHighlightAgentId,
   onSelectAgent,
   onResetZoom
 }) => {
@@ -91,180 +93,167 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
   useEffect(() => {
     const count = ecoMode ? 2500 : 7500;
     const particles: Particle[] = [];
+    
+    const isLive = state === HUDState.LIVE || state === HUDState.WATCHING;
 
     // Pure Nexa Blue & White Color Palette for realistic sci-fi glow
-    const coreColors = ['#FFFFFF', '#E0F2FE', '#BAE6FD'];
-    const midColors = ['#29DFFF', '#00F0FF', '#38BDF8', '#7DD3FC'];
-    const outerColors = ['#0EA5E9', '#0284C7', '#2563EB', '#1D4ED8'];
-    const starColors = ['#FFFFFF', '#F8FAFC', '#CBD5E1'];
+    const coreColors = isLive ? ['#FFFFFF', '#ECFCCB', '#D9F99D'] : ['#FFFFFF', '#E0F2FE', '#BAE6FD'];
+    const midColors = isLive ? ['#84CC16', '#65A30D', '#A3E635', '#BEF264'] : ['#29DFFF', '#00F0FF', '#38BDF8', '#7DD3FC'];
+    const outerColors = isLive ? ['#4D7C0F', '#3F6212', '#166534', '#15803D'] : ['#0EA5E9', '#0284C7', '#2563EB', '#1D4ED8'];
+    const starColors = isLive ? ['#FFFFFF', '#F7FEE7', '#E4F8B8'] : ['#FFFFFF', '#F8FAFC', '#CBD5E1'];
 
     for (let i = 0; i < count; i++) {
       const rand = Math.random();
       let zone: Particle['zone'];
       let baseRadius: number;
       let color: string;
-      let size = Math.random() * 0.7 + 0.3; // Much smaller, no "bouncy ball" look
-      let heightSpread = 16; // Tighter height spread for an orb shape
+      let size = Math.random() * 0.6 + 0.2; // Sleek micro dust
+      let heightSpread = 12;
 
-      if (rand < 0.28) {
-        // Inner Core: White / Cyan Glow
+      if (rand < 0.38) {
+        // Tight Inner Reactor Core (Enlarged)
         zone = 'core_gold';
-        baseRadius = 15 + Math.pow(Math.random(), 1.4) * 35; // Tighter core
+        baseRadius = 10 + Math.pow(Math.random(), 1.4) * 40;
         color = coreColors[Math.floor(Math.random() * coreColors.length)];
-        size = Math.random() * 1.0 + 0.5;
-        heightSpread = 12;
-      } else if (rand < 0.70) {
-        // Mid Ring: Nexa Cyan
+        size = Math.random() * 1.2 + 0.5;
+        heightSpread = 16;
+      } else if (rand < 0.72) {
+        // Core Halo
         zone = 'mid_magenta';
-        baseRadius = 50 + Math.pow(Math.random(), 1.3) * 55;
+        baseRadius = 40 + Math.pow(Math.random(), 1.3) * 45;
         color = midColors[Math.floor(Math.random() * midColors.length)];
         size = Math.random() * 0.8 + 0.3;
-        heightSpread = 20;
-      } else if (rand < 0.93) {
-        // Outer Vortex: Deep Blue
+        heightSpread = 22;
+      } else if (rand < 0.92) {
+        // Outer Core Dust
         zone = 'outer_cyan';
-        baseRadius = 100 + Math.pow(Math.random(), 1.2) * 60;
+        baseRadius = 50 + Math.pow(Math.random(), 1.2) * 35;
         color = outerColors[Math.floor(Math.random() * outerColors.length)];
-        size = Math.random() * 0.6 + 0.2;
-        heightSpread = 28;
-      } else {
-        // Star Halo
-        zone = 'far_stars';
-        baseRadius = 160 + Math.random() * 80;
-        color = starColors[Math.floor(Math.random() * starColors.length)];
         size = Math.random() * 0.5 + 0.2;
-        heightSpread = 40;
+        heightSpread = 22;
+      } else {
+        // Far Space Stars (Very faint)
+        zone = 'far_stars';
+        baseRadius = 90 + Math.random() * 110;
+        color = starColors[Math.floor(Math.random() * starColors.length)];
+        size = Math.random() * 0.4 + 0.15;
+        heightSpread = 35;
       }
 
       particles.push({
         baseRadius,
         angle: Math.random() * Math.PI * 2,
         speed: (0.002 + (1 / (baseRadius * 0.08 + 1)) * 0.004) * (Math.random() > 0.12 ? 1 : -0.6),
-        height: Math.acos(2 * Math.random() - 1), // Spherical phi angle (0 to PI)
+        height: Math.acos(2 * Math.random() - 1),
         heightFreq: 0,
         size,
         color,
-        alpha: Math.random() * 0.6 + 0.1,
+        alpha: Math.random() * 0.5 + 0.1,
         zone
       });
     }
 
     particlesRef.current = particles;
 
-    // Real NEXA AI Agent Nodes connected with thin laser threads (Dhaage)
-    // Coords are multiplied by ~0.55 to compress them inside the orb
+    // Real NEXA AI 6-Agent Network connected with thin laser threads (Wide Orbit Spacing)
     const agents: NexaAgentNode[] = [
       {
         id: 'agent_core',
         name: 'NEXA QUANTUM CORE',
-        role: 'Central Orchestration & Dispatcher',
+        role: 'Central Dispatcher',
         status: 'SYNAPSE SYNC // 100%',
         metric: 'Latency: 2ms • 60 FPS',
         color: '#FFFFFF',
         x: 0,
-        y: -5,
+        y: 0,
         z: 0,
-        connections: [1, 2, 3, 4, 5, 6, 7],
+        connections: [1, 2, 3, 4, 5, 6],
         pulseOffset: 0,
         activityLevel: 1.0
       },
       {
-        id: 'agent_vision',
-        name: 'VISION ANALYZER',
-        role: 'Live Camera OCR & Multimodal Feed',
-        status: 'MONITORING OPTICAL FEED',
-        metric: '30 FPS • 21-Joint Pose',
-        color: '#29DFFF',
-        x: -90,
-        y: -45,
-        z: 28,
-        connections: [0, 2, 4],
-        pulseOffset: 0.15,
-        activityLevel: 0.85
-      },
-      {
-        id: 'agent_reasoning',
-        name: 'REASONING ENGINE',
-        role: 'Gemini 2.0 Flash Deep Thinking',
-        status: 'READY FOR PROMPT',
-        metric: 'Chain-of-Thought Active',
-        color: '#0EA5E9',
-        x: -100,
-        y: 22,
-        z: -17,
-        connections: [0, 1, 3],
-        pulseOffset: 0.3,
+        id: 'agent_kronos',
+        name: 'ARCHON',
+        role: 'QUANTUM ANALYTICS',
+        status: 'ANALYTICS ENGINE // ONLINE',
+        metric: 'ROI & Data Intel',
+        color: '#EC4899',
+        x: 0,
+        y: -185,
+        z: 15,
+        connections: [0, 2, 6],
+        pulseOffset: 0.1,
         activityLevel: 0.95
       },
       {
-        id: 'agent_voice',
-        name: 'VOICE SYNTHESIS',
-        role: 'Aoede / Kore Neural Audio TTS',
-        status: state === HUDState.SPEAKING ? 'TRANSMITTING AUDIO' : 'AUDIO BUFFER READY',
-        metric: '48 kHz • Zero-Latency',
-        color: '#BAE6FD',
-        x: -60,
-        y: 72,
-        z: 33,
-        connections: [0, 2, 6],
-        pulseOffset: 0.45,
-        activityLevel: state === HUDState.SPEAKING ? 1.0 : 0.6
-      },
-      {
-        id: 'agent_memory',
-        name: 'MEMORY VAULT',
-        role: 'Context Cache & User Recollection',
-        status: '12 ENTITIES LOADED',
-        metric: 'Encrypted Firestore Key',
-        color: '#2563EB',
-        x: 83,
-        y: -66,
-        z: 22,
-        connections: [0, 1, 5],
-        pulseOffset: 0.6,
-        activityLevel: 0.75
-      },
-      {
-        id: 'agent_code',
-        name: 'CODE COMPILER',
-        role: 'Live TypeScript & AST Inspector',
-        status: 'ENVIRONMENT STABLE',
-        metric: 'Vite HMR • Zero Errors',
-        color: '#38BDF8',
-        x: 105,
-        y: -22,
-        z: -22,
-        connections: [0, 4, 6],
-        pulseOffset: 0.75,
-        activityLevel: 0.7
-      },
-      {
-        id: 'agent_tasks',
-        name: 'TASK AUTOMATION',
-        role: 'Background Schedules & Alarms',
-        status: 'DAEMON ACTIVE',
-        metric: '0 Pending Alerts',
-        color: '#7DD3FC',
-        x: 94,
-        y: 44,
-        z: 17,
-        connections: [0, 3, 5, 7],
-        pulseOffset: 0.9,
-        activityLevel: 0.8
-      },
-      {
-        id: 'agent_security',
-        name: 'SECURITY MESH',
-        role: '3-Strike Role & Access Firewall',
-        status: 'SECURE SESSION',
-        metric: 'AES-256 Verified',
-        color: '#0284C7',
-        x: 22,
-        y: 88,
-        z: -11,
-        connections: [0, 6],
-        pulseOffset: 0.5,
+        id: 'agent_cypher',
+        name: 'CIPHER',
+        role: 'CODE ARCHITECTURE',
+        status: 'COMPILER CORE // OPTIMAL',
+        metric: 'TS AST • Zero Errors',
+        color: '#10B981',
+        x: 165,
+        y: -95,
+        z: -15,
+        connections: [0, 1, 3],
+        pulseOffset: 0.25,
         activityLevel: 0.9
+      },
+      {
+        id: 'agent_aura',
+        name: 'ARGUS',
+        role: 'VISION & SPATIAL',
+        status: 'VISION SENSOR // ACTIVE',
+        metric: '30 FPS Optical Feed',
+        color: '#F59E0B',
+        x: 165,
+        y: 95,
+        z: 20,
+        connections: [0, 2, 4],
+        pulseOffset: 0.4,
+        activityLevel: 0.85
+      },
+      {
+        id: 'agent_veritas',
+        name: 'ORION',
+        role: 'RESEARCH & DEEP SEARCH',
+        status: 'SEARCH GROUNDING // LIVE',
+        metric: '100+ Live Sources',
+        color: '#3B82F6',
+        x: 0,
+        y: 185,
+        z: -10,
+        connections: [0, 3, 5],
+        pulseOffset: 0.55,
+        activityLevel: 0.92
+      },
+      {
+        id: 'agent_echo',
+        name: 'AEGIS',
+        role: 'SECURITY & DEFENSE',
+        status: 'FIREWALL MESH // SECURE',
+        metric: 'AES-256 Encrypted',
+        color: '#EF4444',
+        x: -165,
+        y: 95,
+        z: 15,
+        connections: [0, 4, 6],
+        pulseOffset: 0.7,
+        activityLevel: 0.88
+      },
+      {
+        id: 'agent_valkyrie',
+        name: 'KRONOS',
+        role: 'WORKFLOW ORCHESTRATION',
+        status: 'TASK DAEMON // RUNNING',
+        metric: 'Priority Queue Ready',
+        color: '#8B5CF6',
+        x: -165,
+        y: -95,
+        z: -20,
+        connections: [0, 1, 5],
+        pulseOffset: 0.85,
+        activityLevel: 0.98
       }
     ];
 
@@ -408,8 +397,6 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         smoothedAudioRef.current.treble *= 0.9;
       }
 
-      // Audio values are still smoothed but not used for scaling anymore to keep rotation simple
-
       // Smooth Camera Transforms
       const cam = cameraRef.current;
       cam.yaw += (cam.targetYaw - cam.yaw) * 0.08;
@@ -431,7 +418,6 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       const centerY = height / 2;
 
       // Dynamic Scale & Zoom Factor
-      // Mobile portrait safe dimension
       const baseDim = Math.min(width, height);
       const scaleBase = (baseDim / 540) * cam.zoom;
 
@@ -443,6 +429,83 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         setIsZoomedInUi(isZoomedIn);
       }
 
+      // Responsive Orbit Scale for narrow Android screens to prevent clipping
+      const responsiveOrbitScale = Math.min(1.0, Math.max(0.65, (width - 70) / 440));
+
+      // =========================================================
+      // 0. SCI-FI HUD BACKGROUND & VOLUMETRIC SPATIAL GLOW
+      // =========================================================
+      ctx.save();
+      // Smooth Ambient Deep Space Glow Gradient across entire screen
+      const bgGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) * 0.85);
+      bgGlow.addColorStop(0, 'rgba(14, 165, 233, 0.22)');
+      bgGlow.addColorStop(0.35, 'rgba(6, 182, 212, 0.10)');
+      bgGlow.addColorStop(0.65, 'rgba(3, 105, 161, 0.04)');
+      bgGlow.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
+
+      ctx.fillStyle = bgGlow;
+      ctx.fillRect(0, 0, width, height);
+
+      // Cyber Matrix Background Dot Grid
+      ctx.fillStyle = 'rgba(41, 223, 255, 0.07)';
+      const gridSpacing = Math.max(32, Math.floor(width / 16));
+      for (let gx = (centerX % gridSpacing); gx < width; gx += gridSpacing) {
+        for (let gy = (centerY % gridSpacing); gy < height; gy += gridSpacing) {
+          ctx.fillRect(gx, gy, 1.2, 1.2);
+        }
+      }
+
+      // Tactical HUD Compass Radar Rings
+      const hudRings = [140 * scaleBase, 220 * scaleBase, 310 * scaleBase];
+      hudRings.forEach((r, idx) => {
+        ctx.strokeStyle = idx === 1 ? 'rgba(41, 223, 255, 0.22)' : 'rgba(41, 223, 255, 0.10)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash(idx === 0 ? [6, 12] : idx === 1 ? [2, 8] : [1, 15]);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+
+      // Tactical HUD Axis Crosshairs (stop at outer edge of central orb)
+      ctx.strokeStyle = 'rgba(41, 223, 255, 0.09)';
+      ctx.lineWidth = 1;
+      const coreRBase = Math.max(48, Math.min(width * 0.16, 75)) * scaleBase;
+      const coreAvoidR = coreRBase * 1.35;
+      const armLen = 380 * scaleBase;
+      ctx.beginPath();
+      // Horizontal left arm
+      ctx.moveTo(centerX - armLen, centerY); ctx.lineTo(centerX - coreAvoidR, centerY);
+      // Horizontal right arm
+      ctx.moveTo(centerX + coreAvoidR, centerY); ctx.lineTo(centerX + armLen, centerY);
+      // Vertical top arm
+      ctx.moveTo(centerX, centerY - armLen); ctx.lineTo(centerX, centerY - coreAvoidR);
+      // Vertical bottom arm
+      ctx.moveTo(centerX, centerY + coreAvoidR); ctx.lineTo(centerX, centerY + armLen);
+      ctx.stroke();
+
+      // Degree Ticks on Outer HUD Ring
+      ctx.font = '600 8px Rajdhani, monospace';
+      ctx.fillStyle = 'rgba(41, 223, 255, 0.45)';
+      ctx.textAlign = 'center';
+      const outerHUD = 220 * scaleBase;
+      ctx.fillText('000°', centerX, centerY - outerHUD - 6);
+      ctx.fillText('090°', centerX + outerHUD + 16, centerY + 3);
+      ctx.fillText('180°', centerX, centerY + outerHUD + 12);
+      ctx.fillText('270°', centerX - outerHUD - 16, centerY + 3);
+
+      // Corner Telemetry HUD Labels
+      ctx.font = '600 9px Rajdhani, monospace';
+      ctx.fillStyle = 'rgba(41, 223, 255, 0.30)';
+      ctx.textAlign = 'left';
+      ctx.fillText('SYS.MATRIX // v5.2', 16, 24);
+      ctx.fillText('6/6 AGENTS SYNCED', 16, 36);
+
+      ctx.textAlign = 'right';
+      ctx.fillText('LATENCY: 1.2ms', width - 16, 24);
+      ctx.fillText('SECURE SHA-256', width - 16, 36);
+      ctx.restore();
+
       // =========================================================
       // 1. PROJECT 3D AGENT NODES
       // =========================================================
@@ -450,11 +513,10 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       const projectedAgents: { x: number; y: number; z: number; scale: number; agent: NexaAgentNode; index: number }[] = [];
 
       agents.forEach((agent, index) => {
-        // Expand distance when zoomed in for crystal clear spacing
         const spreadFactor = 1.0 + zoomProgress * 0.45;
-        const radX = (agent.x * spreadFactor) * scaleBase;
-        const radY = (agent.y * spreadFactor) * scaleBase;
-        const radZ = (agent.z * spreadFactor) * scaleBase;
+        const radX = (agent.x * responsiveOrbitScale * spreadFactor) * scaleBase;
+        const radY = (agent.y * responsiveOrbitScale * spreadFactor) * scaleBase;
+        const radZ = (agent.z * responsiveOrbitScale * spreadFactor) * scaleBase;
 
         // 3D Rotation Matrix
         let rx = radX * Math.cos(currentYaw) + radZ * Math.sin(currentYaw);
@@ -471,22 +533,107 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       });
 
       // =========================================================
-      // 2. DRAW THIN LASER THREADS (DHAAGE) & REAL-TIME DATA PACKETS
+      // 2. DRAW 3D STARDUST GALAXY PARTICLES
+      // =========================================================
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      const particles = particlesRef.current;
+      const isVoiceActive = state === HUDState.SPEAKING || state === HUDState.LIVE || state === HUDState.WATCHING;
+      const audioExpansion = isVoiceActive ? (smoothedAudioRef.current.vol * 35) : 0;
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.angle += p.speed;
+
+        const dynamicR = (p.baseRadius + (audioExpansion * Math.random())) * scaleBase;
+        const theta = p.angle;
+        const phi = p.height;
+
+        let px = dynamicR * Math.sin(phi) * Math.cos(theta);
+        let pz = dynamicR * Math.sin(phi) * Math.sin(theta);
+        let py = dynamicR * Math.cos(phi);
+
+        let rx = px * Math.cos(currentYaw) + pz * Math.sin(currentYaw);
+        let rz = -px * Math.sin(currentYaw) + pz * Math.cos(currentYaw);
+        let ry = py * Math.cos(currentPitch) - rz * Math.sin(currentPitch);
+        let fz = py * Math.sin(currentPitch) + rz * Math.cos(currentPitch);
+
+        const fov = 420;
+        const scale = fov / (fov + fz);
+        const screenX = centerX + rx * scale;
+        const screenY = centerY + ry * scale;
+
+        const densityFade = isZoomedIn ? (1.0 - zoomProgress * 0.35) : 1.0;
+        const depthAlpha = Math.max(0.06, Math.min(0.95, scale * p.alpha * densityFade));
+        const audioSizeBoost = isVoiceActive ? (smoothedAudioRef.current.bass * 1.5 * Math.random()) : 0;
+        const finalSize = Math.max(0.4, (p.size + audioSizeBoost) * scale);
+
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = depthAlpha;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, finalSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // =========================================================
+      // 3. DRAW THIN LASER THREADS, RADIAL CORE RAYS & DATA PACKETS
       // =========================================================
       ctx.lineWidth = Math.max(0.75, 1.2 * scaleBase * (1 - zoomProgress * 0.3));
+      const isLiveNow = state === HUDState.LIVE || state === HUDState.WATCHING;
 
-      // Render connected thin thread filaments
+      // A. Radial Laser Lines connecting Central Core Outer Edge to each Sub-Agent
+      const coreR = Math.max(48, Math.min(width * 0.16, 75)) * scaleBase;
+      const pulseBoost = Math.sin(time * 0.001) * 2.5 * scaleBase;
+      const activeCoreR = coreR + pulseBoost;
+
+      projectedAgents.forEach(({ x, y, agent, index }) => {
+        if (index === 0) return;
+        const isHighlighted = activeHighlightAgentId === agent.id;
+
+        const angle = Math.atan2(y - centerY, x - centerX);
+        const startR = activeCoreR * 1.05;
+        const startX = centerX + Math.cos(angle) * startR;
+        const startY = centerY + Math.sin(angle) * startR;
+
+        const lineGrad = ctx.createLinearGradient(startX, startY, x, y);
+        lineGrad.addColorStop(0, 'rgba(41, 223, 255, 0.6)');
+        lineGrad.addColorStop(1, isHighlighted ? agent.color : `${agent.color}88`);
+
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth = (isHighlighted ? 2.5 : 1.2) * scaleBase;
+        ctx.shadowColor = isHighlighted ? agent.color : 'transparent';
+        ctx.shadowBlur = isHighlighted ? 12 : 0;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+
+      // B. Inter-agent Filament Connection Threads
       projectedAgents.forEach((p1) => {
+        if (p1.index === 0) return;
         p1.agent.connections.forEach((targetIdx) => {
+          if (targetIdx === 0) return;
           const p2 = projectedAgents[targetIdx];
           if (p2) {
-            const threadAlpha = Math.max(0.15, Math.min(0.65, 0.5 - (p1.z + p2.z) / 1400)) * (0.8 + zoomProgress * 0.4);
+            let threadAlpha = Math.max(0.15, Math.min(0.65, 0.5 - (p1.z + p2.z) / 1400)) * (0.8 + zoomProgress * 0.4);
+            if (state === HUDState.SPEAKING || isLiveNow) {
+              threadAlpha = Math.min(1.0, threadAlpha + smoothedAudioRef.current.vol * 0.5);
+            }
             
-            // Ultra-thin luminous thread line (Dhaaga) - Pure Nexa Blue & White
             const threadGrad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-            threadGrad.addColorStop(0, `rgba(41, 223, 255, ${threadAlpha})`);
-            threadGrad.addColorStop(0.5, `rgba(2, 132, 199, ${threadAlpha * 0.9})`);
-            threadGrad.addColorStop(1, `rgba(255, 255, 255, ${threadAlpha})`);
+            if (isLiveNow) {
+              threadGrad.addColorStop(0, `rgba(132, 204, 22, ${threadAlpha})`);
+              threadGrad.addColorStop(0.5, `rgba(77, 124, 15, ${threadAlpha * 0.9})`);
+              threadGrad.addColorStop(1, `rgba(236, 252, 203, ${threadAlpha})`);
+            } else {
+              threadGrad.addColorStop(0, `rgba(41, 223, 255, ${threadAlpha})`);
+              threadGrad.addColorStop(0.5, `rgba(2, 132, 199, ${threadAlpha * 0.9})`);
+              threadGrad.addColorStop(1, `rgba(255, 255, 255, ${threadAlpha})`);
+            }
 
             ctx.strokeStyle = threadGrad;
             ctx.beginPath();
@@ -496,6 +643,136 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
           }
         });
       });
+
+      // =========================================================
+      // 4. 3D HOLOGRAPHIC QUANTUM CORE ORB & GYROSCOPE RINGS
+      // =========================================================
+      ctx.save();
+      ctx.translate(centerX, centerY);
+
+      // A. Volumetric Outer Plasma Glow Field
+      const outerGlowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, activeCoreR * 2.2);
+      outerGlowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      outerGlowGrad.addColorStop(0.2, 'rgba(41, 223, 255, 0.85)');
+      outerGlowGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.4)');
+      outerGlowGrad.addColorStop(0.75, 'rgba(3, 105, 161, 0.12)');
+      outerGlowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.shadowColor = '#29DFFF';
+      ctx.shadowBlur = 35 * scaleBase;
+      ctx.fillStyle = outerGlowGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, activeCoreR * 2.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // A1. Continuous Expanding Slow Pulsing Core Shockwaves (Slowed Down to 0.00015)
+      for (let i = 0; i < 4; i++) {
+        const waveProgress = ((time * 0.00015) + i * 0.25) % 1;
+        const waveRadius = activeCoreR * 0.7 + waveProgress * (200 * scaleBase);
+        const waveAlpha = Math.max(0, (1 - waveProgress) * 0.55);
+
+        ctx.strokeStyle = `rgba(41, 223, 255, ${waveAlpha})`;
+        ctx.lineWidth = Math.max(0.8, (2.2 - waveProgress * 1.5) * scaleBase);
+        ctx.shadowColor = '#29DFFF';
+        ctx.shadowBlur = 12 * (1 - waveProgress);
+        ctx.beginPath();
+        ctx.arc(0, 0, waveRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // B. 3D Tilting Gyroscope Arc-Reactor Rings (Slower rotations)
+      // Ring 1: Horizontal Orbital Ring
+      ctx.save();
+      ctx.rotate(time * 0.0004);
+      ctx.scale(1.0, 0.38);
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2 * scaleBase;
+      ctx.shadowColor = '#00F0FF';
+      ctx.shadowBlur = 15;
+      ctx.setLineDash([12, 8, 4, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, activeCoreR * 1.55, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Ring 2: Tilted 45-degree Reverse Orbital Ring
+      ctx.save();
+      ctx.rotate(-time * 0.0003 + Math.PI / 4);
+      ctx.scale(0.42, 1.0);
+      ctx.strokeStyle = 'rgba(41, 223, 255, 0.85)';
+      ctx.lineWidth = 1.5 * scaleBase;
+      ctx.shadowColor = '#29DFFF';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(0, 0, activeCoreR * 1.4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Orbiting Photon Node on Ring 2
+      const orbAngle = time * 0.0006;
+      const orbX = Math.cos(orbAngle) * activeCoreR * 1.4;
+      const orbY = Math.sin(orbAngle) * activeCoreR * 1.4;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, 4 * scaleBase, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // C. Rotating Precision Aperture HUD Ring
+      ctx.save();
+      ctx.rotate(time * 0.0002);
+      const tickCount = 36;
+      ctx.strokeStyle = 'rgba(41, 223, 255, 0.65)';
+      ctx.lineWidth = 1.2 * scaleBase;
+      for (let i = 0; i < tickCount; i++) {
+        const angle = (i * Math.PI * 2) / tickCount;
+        const innerRadius = activeCoreR * 1.1;
+        const outerRadius = activeCoreR * (i % 3 === 0 ? 1.22 : 1.15);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius);
+        ctx.lineTo(Math.cos(angle) * outerRadius, Math.sin(angle) * outerRadius);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // D. 3D Solid Inner Plasma Core Sphere
+      const innerSphereGrad = ctx.createRadialGradient(
+        -activeCoreR * 0.2, -activeCoreR * 0.2, 0,
+        0, 0, activeCoreR * 0.85
+      );
+      innerSphereGrad.addColorStop(0, '#FFFFFF');
+      innerSphereGrad.addColorStop(0.4, '#C0F2FE');
+      innerSphereGrad.addColorStop(0.75, '#29DFFF');
+      innerSphereGrad.addColorStop(1, '#0284C7');
+
+      ctx.fillStyle = innerSphereGrad;
+      ctx.shadowColor = '#FFFFFF';
+      ctx.shadowBlur = 25 * scaleBase;
+      ctx.beginPath();
+      ctx.arc(0, 0, activeCoreR * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // E. Core Holographic Typography & Status Tag
+      ctx.save();
+      ctx.textAlign = 'center';
+
+      // Title: NEXA CORE
+      ctx.font = '800 13px Rajdhani, sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor = '#00F0FF';
+      ctx.shadowBlur = 10;
+      ctx.fillText('NEXA CORE', 0, -4 * scaleBase);
+
+      // Status Pill: ONLINE
+      ctx.font = '700 9.5px Rajdhani, monospace';
+      ctx.fillStyle = '#29DFFF';
+      ctx.shadowColor = '#29DFFF';
+      ctx.shadowBlur = 8;
+      ctx.fillText('● ONLINE', 0, 14 * scaleBase);
+      ctx.restore();
+
+      ctx.restore();
 
       // Render Active Live Data Packets Streaming along Threads
       const packets = packetsRef.current;
@@ -511,7 +788,10 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
           const curX = p1.x + (p2.x - p1.x) * pkt.progress;
           const curY = p1.y + (p2.y - p1.y) * pkt.progress;
 
-          // Packet trailing tail
+          // Don't render packet if it is inside or crossing the central core orb
+          const distToCore = Math.hypot(curX - centerX, curY - centerY);
+          if (distToCore < activeCoreR * 1.05) return;
+
           const tailProgress = Math.max(0, pkt.progress - 0.08);
           const tailX = p1.x + (p2.x - p1.x) * tailProgress;
           const tailY = p1.y + (p2.y - p1.y) * tailProgress;
@@ -528,64 +808,17 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
           ctx.lineTo(curX, curY);
           ctx.stroke();
 
-          // Glowing photon head
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(curX, curY, 1.8 * scaleBase, 0, Math.PI * 2);
+          ctx.arc(curX, curY, 2 * scaleBase, 0, Math.PI * 2);
           ctx.fill();
         }
       });
 
       // =========================================================
-      // 3. VIBRANT 3D MULTI-LAYER NEBULA STARS PARTICLES
+      // 5. AGENT SATELLITE NODES & TARGET RETICLES
       // =========================================================
-      ctx.globalCompositeOperation = 'lighter';
-
-      const particles = particlesRef.current;
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-
-        p.angle += p.speed;
-        const dynamicR = p.baseRadius * scaleBase;
-        
-        const theta = p.angle;
-        const phi = p.height;
-
-        // Spherical Coordinates to Cartesian
-        let px = dynamicR * Math.sin(phi) * Math.cos(theta);
-        let pz = dynamicR * Math.sin(phi) * Math.sin(theta);
-        let py = dynamicR * Math.cos(phi);
-
-        let rx = px * Math.cos(currentYaw) + pz * Math.sin(currentYaw);
-        let rz = -px * Math.sin(currentYaw) + pz * Math.cos(currentYaw);
-        let ry = py * Math.cos(currentPitch) - rz * Math.sin(currentPitch);
-        let fz = py * Math.sin(currentPitch) + rz * Math.cos(currentPitch);
-
-        const fov = 440;
-        const scale = fov / (fov + fz);
-        const screenX = centerX + rx * scale;
-        const screenY = centerY + ry * scale;
-
-        // When zoomed in, outer particle density softens so agent cards shine clearly
-        const densityFade = isZoomedIn ? (1.0 - zoomProgress * 0.35) : 1.0;
-        const depthAlpha = Math.max(0.08, Math.min(1.0, scale * p.alpha * densityFade));
-        const finalSize = Math.max(0.5, p.size * scale);
-
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = depthAlpha;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, finalSize, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.shadowBlur = 0;
-
-      // =========================================================
-      // 5. AGENT HOLOGRAPHIC CARDS & LIVE TELEMETRY (DYNAMIC ON ZOOM)
-      // =========================================================
-      ctx.globalCompositeOperation = 'source-over';
-
-      let closestAgentId = null;
+      let closestAgentId: string | null = null;
       let pointerX = centerX;
       let pointerY = centerY;
       const isPointing = gestureRef.current.gesture === 'POINTING';
@@ -596,111 +829,131 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         
         let minDist = Infinity;
         projectedAgents.forEach((p) => {
+          if (p.index === 0) return;
           const dist = Math.hypot(p.x - pointerX, p.y - pointerY);
           if (dist < minDist && dist < 120 * scaleBase) {
             minDist = dist;
             closestAgentId = p.agent.id;
           }
         });
-        
-        ctx.save();
-        ctx.strokeStyle = '#00F0FF';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(pointerX, pointerY, 8, 0, Math.PI * 2);
-        ctx.moveTo(pointerX - 12, pointerY);
-        ctx.lineTo(pointerX + 12, pointerY);
-        ctx.moveTo(pointerX, pointerY - 12);
-        ctx.lineTo(pointerX, pointerY + 12);
-        ctx.stroke();
-        ctx.restore();
       }
 
-      projectedAgents.forEach(({ x, y, z, scale, agent }) => {
-        const nodeAlpha = Math.max(0.3, Math.min(1.0, 1.0 - z / 600));
+      projectedAgents.forEach(({ x, y, z, scale, agent, index }) => {
+        if (index === 0) return; // Skip central core node, rendered above
+
+        const isHighlighted = activeHighlightAgentId === agent.id;
+        const nodeAlpha = isHighlighted ? 1.0 : Math.max(0.4, Math.min(1.0, 1.0 - z / 800));
         ctx.globalAlpha = nodeAlpha;
 
+        // Target Reticle Node
+        const nodeR = (isHighlighted ? 9 : 7.5) * scaleBase;
+        
+        // Outer Glowing Circle
+        ctx.strokeStyle = agent.color;
+        ctx.lineWidth = 1.8 * scaleBase;
+        ctx.shadowColor = agent.color;
+        ctx.shadowBlur = isHighlighted ? 16 : 8;
+        ctx.beginPath();
+        ctx.arc(x, y, nodeR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner Filled Core Dot
         ctx.fillStyle = agent.color;
         ctx.beginPath();
-        ctx.arc(x, y, 4 * scaleBase, 0, Math.PI * 2);
+        ctx.arc(x, y, 3.2 * scaleBase, 0, Math.PI * 2);
         ctx.fill();
 
-        if (isZoomedIn) {
-          const isSelected = closestAgentId === agent.id;
+        // Crosshair Target Ticks
+        const tickLen = 3 * scaleBase;
+        ctx.strokeStyle = agent.color;
+        ctx.lineWidth = 1 * scaleBase;
+        ctx.beginPath();
+        ctx.moveTo(x - nodeR - tickLen, y); ctx.lineTo(x - nodeR, y);
+        ctx.moveTo(x + nodeR, y); ctx.lineTo(x + nodeR + tickLen, y);
+        ctx.moveTo(x, y - nodeR - tickLen); ctx.lineTo(x, y - nodeR);
+        ctx.moveTo(x, y + nodeR); ctx.lineTo(x, y + nodeR + tickLen);
+        ctx.stroke();
 
-          ctx.strokeStyle = isSelected ? '#00F0FF' : '#FFFFFF';
-          ctx.lineWidth = isSelected ? 2 : 1;
-          ctx.beginPath();
-          ctx.arc(x, y, (isSelected ? 9 : 7) * scaleBase, 0, Math.PI * 2);
-          ctx.stroke();
+        // Pulsing Outer Halo Ring
+        const pulseHalo = (nodeR + 4 + Math.sin(time * 0.006 + agent.pulseOffset) * 2.5) * scaleBase;
+        ctx.strokeStyle = agent.color;
+        ctx.globalAlpha = nodeAlpha * (isHighlighted ? 0.8 : 0.35);
+        ctx.lineWidth = 1 * scaleBase;
+        ctx.beginPath();
+        ctx.arc(x, y, pulseHalo, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = nodeAlpha;
+        ctx.shadowBlur = 0;
 
-          const badgeX = x + 14 * scaleBase;
-          const badgeY = y - 12 * scaleBase;
+        // 3. Quad-Direction Typography (Zero Overlap Guaranteed)
+        ctx.save();
+        ctx.font = '700 11px Rajdhani, sans-serif';
+        
+        const isTop = y < centerY - 60;
+        const isBottom = y > centerY + 60;
+        const isRight = x > centerX + 40;
+        const isLeft = x < centerX - 40;
 
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(badgeX, badgeY + 8);
-          ctx.stroke();
+        let textX = x;
+        let textY = y;
 
-          if (isSelected) {
-            ctx.save();
-            const cardAlpha = Math.min(1.0, 0.2 + zoomProgress * 0.8);
-            ctx.globalAlpha = cardAlpha * nodeAlpha;
-            const cardW = Math.min(180, width * 0.45);
-            const cardH = 54;
-
-            ctx.fillStyle = 'rgba(3, 7, 18, 0.92)';
-            ctx.strokeStyle = agent.color;
-            ctx.lineWidth = 1.5;
-            ctx.shadowColor = agent.color;
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.roundRect(badgeX, badgeY - 10, cardW, cardH, 6);
-            ctx.fill();
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#22C55E';
-            ctx.beginPath();
-            ctx.arc(badgeX + 8, badgeY + 2, 3, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.font = '700 11px Rajdhani, sans-serif';
-            ctx.fillStyle = agent.color;
-            ctx.fillText(agent.name, badgeX + 16, badgeY + 5);
-
-            ctx.font = '500 9px Rajdhani, sans-serif';
-            ctx.fillStyle = '#E2E8F0';
-            ctx.fillText(agent.role, badgeX + 8, badgeY + 19);
-
-            ctx.font = '600 8.5px Rajdhani, monospace';
-            ctx.fillStyle = '#38BDF8';
-            ctx.fillText(agent.status, badgeX + 8, badgeY + 31);
-
-            ctx.font = '400 8px Rajdhani, monospace';
-            ctx.fillStyle = '#94A3B8';
-            ctx.fillText(agent.metric, badgeX + 8, badgeY + 41);
-            
-            ctx.restore();
-          } else {
-            ctx.font = '600 10px Rajdhani, monospace';
-            const labelWidth = ctx.measureText(agent.name).width;
-            const boxW = labelWidth + 14;
-            const boxH = 18;
-
-            ctx.fillStyle = 'rgba(4, 8, 16, 0.9)';
-            ctx.strokeStyle = agent.color;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.roundRect(badgeX, badgeY - 10, boxW, boxH, 4);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(agent.name, badgeX + 7, badgeY + 2);
-          }
+        if (isTop) {
+          ctx.textAlign = 'center';
+          textX = x;
+          textY = y - nodeR - 14 * scaleBase;
+        } else if (isBottom) {
+          ctx.textAlign = 'center';
+          textX = x;
+          textY = y + nodeR + 16 * scaleBase;
+        } else if (isRight) {
+          ctx.textAlign = 'left';
+          textX = x + nodeR + 12 * scaleBase;
+          textY = y - 2 * scaleBase;
+        } else if (isLeft) {
+          ctx.textAlign = 'right';
+          textX = x - nodeR - 12 * scaleBase;
+          textY = y - 2 * scaleBase;
+        } else {
+          ctx.textAlign = 'left';
+          textX = x + nodeR + 10 * scaleBase;
+          textY = y;
         }
+
+        // Draw Agent Name
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = agent.color;
+        ctx.shadowBlur = 8;
+        ctx.fillText(agent.name, textX, textY);
+
+        // Expanded Holographic Card on Selection/Highlight
+        const isSelected = closestAgentId === agent.id || isHighlighted;
+        if (isSelected) {
+          const cardW = Math.min(180, width * 0.42);
+          const cardH = 48;
+          const badgeX = isLeft ? textX - cardW : (isTop || isBottom ? x - cardW / 2 : textX);
+          const badgeY = isTop ? textY - cardH - 12 : (isBottom ? textY + 8 : textY + 16);
+
+          ctx.fillStyle = 'rgba(3, 7, 18, 0.94)';
+          ctx.strokeStyle = agent.color;
+          ctx.lineWidth = 1.2;
+          ctx.shadowColor = agent.color;
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.roundRect(badgeX, badgeY, cardW, cardH, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.textAlign = 'left';
+          ctx.font = '600 8.5px Rajdhani, monospace';
+          ctx.fillStyle = '#38BDF8';
+          ctx.fillText(agent.status, badgeX + 8, badgeY + 18);
+
+          ctx.font = '400 8px Rajdhani, monospace';
+          ctx.fillStyle = '#94A3B8';
+          ctx.fillText(agent.metric, badgeX + 8, badgeY + 34);
+        }
+
+        ctx.restore();
       });
       requestRef.current = requestAnimationFrame(render);
     };
@@ -711,7 +964,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       cancelAnimationFrame(requestRef.current);
       observer.disconnect();
     };
-  }, [state, rotationSpeed, accentColor, ecoMode]);
+  }, [state, rotationSpeed, accentColor, ecoMode, activeHighlightAgentId]);
 
   return (
     <div

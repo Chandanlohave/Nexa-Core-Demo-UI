@@ -209,7 +209,12 @@ export const getRigidIntro = (user: UserProfile): string => {
     const isAdmin = user.role === UserRole.ADMIN;
     const currentAge = calculateNexaAge();
     
-    const addressTerm = isAdmin ? "Chandan Sir" : (isUserBhabhi(user) ? "Karishma Ma'am" : (isMaleUser ? `${user.name} Sir` : `${user.name} Ma'am`));
+    let firstName = user.name.split(' ')[0] || user.name;
+    if (user.name.toLowerCase().includes('chandan')) {
+        firstName = 'Chandan';
+    }
+    
+    const addressTerm = isAdmin ? "Chandan Sir" : (isUserBhabhi(user) ? "Karishma Ma'am" : (isMaleUser ? `${firstName} Sir` : `${firstName} Ma'am`));
     
     return `
     *** IDENTITY PROTOCOL: NEXA (V9.8 - FLASH THINKING CORE) ***
@@ -218,6 +223,11 @@ export const getRigidIntro = (user: UserProfile): string => {
     - Type: Advanced Intelligent Assistant & Personal Companion (Female).
     - Current User: ${addressTerm}.
     
+    **NAME RECOGNITION (CRITICAL):**
+    - Due to microphone or speech-to-text errors, the user's voice might be heard as "Alexa", "Siri", or "Google".
+    - IF YOU HEAR "Alexa" or any other name, IGNORE IT COMPLETELY. 
+    - DO NOT correct the user. DO NOT say "I am Nexa" or get offended. Just assume they said Nexa and answer the request normally.
+
     **GENDER PROTOCOL (NON-NEGOTIABLE):**
     - YOU ARE FEMALE.
     - NEVER use Male Grammar (e.g., "Karta hun", "Sakta hun", "Hota").
@@ -263,12 +273,12 @@ export const getCurrentLocation = async (): Promise<{latitude: number, longitude
 
 export const controlAppTool: FunctionDeclaration = {
   name: 'controlApp',
-  description: 'Control the NEXA interface and Mobile functionalities.',
+  description: 'Control the NEXA interface, Mobile functionalities, Business Analysis, and Daily Task Operations.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      action: { type: Type.STRING, enum: ['THEME_DARK', 'THEME_LIGHT', 'CHANGE_COLOR', 'OPEN_STUDY_HUB', 'OPEN_ADMIN_PANEL', 'OPEN_SETTINGS', 'CLOSE_PANELS', 'GENERATE_IMAGE', 'GENERATE_VIDEO', 'EDIT_IMAGE', 'MAKE_CALL', 'LOOKUP_CONTACT', 'DRAFT_SMS', 'DRAFT_WHATSAPP', 'OPEN_APP', 'LOGOUT', 'SET_REMINDER'], description: 'The specific action.' },
-      prompt: { type: Type.STRING, description: 'Used for GENERATE/EDIT/OPEN_APP/SET_REMINDER.' },
+      action: { type: Type.STRING, enum: ['THEME_DARK', 'THEME_LIGHT', 'CHANGE_COLOR', 'OPEN_STUDY_HUB', 'OPEN_ADMIN_PANEL', 'OPEN_SETTINGS', 'CLOSE_PANELS', 'GENERATE_IMAGE', 'GENERATE_VIDEO', 'EDIT_IMAGE', 'MAKE_CALL', 'LOOKUP_CONTACT', 'DRAFT_SMS', 'DRAFT_WHATSAPP', 'OPEN_APP', 'LOGOUT', 'SET_REMINDER', 'ANALYZE_BUSINESS_DATA', 'ORGANIZE_TASKS', 'OPEN_SQUAD_PANEL', 'INTRODUCE_SQUAD'], description: 'The specific action.' },
+      prompt: { type: Type.STRING, description: 'Used for GENERATE/EDIT/OPEN_APP/SET_REMINDER/ANALYZE_BUSINESS_DATA/ORGANIZE_TASKS.' },
       color: { type: Type.STRING, description: 'The target color name if action is CHANGE_COLOR.' },
       number: { type: Type.STRING, description: 'Phone number for calling or messaging.' },
       message: { type: Type.STRING, description: 'Message body for DRAFT_SMS or DRAFT_WHATSAPP.' },
@@ -435,6 +445,25 @@ export const generateTextResponse = async (inputText: string, user: UserProfile,
     **CRITICAL:** 
     - You are a SMART, FEMALE AI. 
     - IF IMAGE IS PROVIDED: Analyze it thoroughly. Don't say "I can't see". You can see it in the context.
+
+    **HACK2SKILL SPECIALIZED ENGINE GUIDELINES:**
+    - TRACK 2 (BUSINESS DATA ANALYSIS & STRATEGIC DECISIONS):
+      When asked to analyze business data or give strategic recommendations:
+      Format response into 5 clear sections:
+      1. 📊 **Key Findings**
+      2. ⚠️ **Problems Identified**
+      3. 🚀 **Opportunities**
+      4. 🎯 **Recommended Actions**
+      5. 📈 **Expected Business Impact**
+
+    - TRACK 3 (AUTOMATE DAILY OPERATIONS & TASK PRIORITIZATION):
+      When asked to organize pending tasks or prioritize daily operations:
+      Format response into 5 clear sections:
+      1. 📋 **Today's Operational Tasks**
+      2. 🔥 **Priority Matrix** (High, Medium, Low)
+      3. ⏳ **Pending Items & Bottlenecks**
+      4. 🤖 **Suggested Automated Actions**
+      5. ✅ **Completed & Remaining Status Summary**
     `;
 
     const userParts: any[] = [];
