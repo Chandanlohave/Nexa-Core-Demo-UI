@@ -97,10 +97,12 @@ export class NexaCoreController {
             this.callbacks.onMessageAdded(modelMsg);
             appendMessageToMemory(this.user, modelMsg);
             
-            if (response.text) {
-                await this.callbacks.onSpeak(response.text);
-            } else {
-                this.callbacks.onStateChange(HUDState.IDLE);
+            if (response.action !== 'INTRODUCE_SQUAD') {
+                if (response.text) {
+                    await this.callbacks.onSpeak(response.text);
+                } else {
+                    this.callbacks.onStateChange(HUDState.IDLE);
+                }
             }
         } catch (e) {
             console.error(e);
@@ -111,12 +113,6 @@ export class NexaCoreController {
 
     public executeAction(action: ActionType, params: any) {
         switch(action) {
-            case 'LOGOUT': 
-            case 'THEME_DARK': 
-            case 'THEME_LIGHT': 
-            case 'OPEN_ADMIN_PANEL': 
-                this.callbacks.onAction(action, params);
-                break;
             case 'MODIFY_CODE': 
                 this.callbacks.onStateChange(HUDState.CODING);
                 setTimeout(async () => {
@@ -143,6 +139,9 @@ export class NexaCoreController {
                         this.callbacks.onStateChange(HUDState.IDLE); 
                     }
                 }, 100);
+                break;
+            default:
+                this.callbacks.onAction(action, params);
                 break;
         }
     }

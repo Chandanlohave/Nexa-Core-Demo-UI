@@ -122,15 +122,19 @@ export const isUserBhabhi = (user: UserProfile): boolean => {
     return user.mobile === BHABHI_UID || ['karishma', 'karishma yesankar', 'karishma lohave'].includes(user.name.toLowerCase().trim());
 };
 
-const getEnvApiKey = (): string | null => {
-    const systemKey = process.env.API_KEY;
-    if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
+export const getEnvApiKey = (): string | null => {
+    try {
+        const key = process.env.API_KEY || (process.env as any).GEMINI_API_KEY || (import.meta as any).env?.VITE_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+        if (key && key !== "undefined" && key !== "null" && key.trim().length > 0) {
+            return key.trim();
+        }
+    } catch(e) {}
     return null;
 };
 
-const getSecureApiKey = async (): Promise<string> => {
+export const getSecureApiKey = async (): Promise<string> => {
   const customKey = localStorage.getItem('nexa_client_api_key');
-  if (customKey && customKey.trim().length > 10) return customKey;
+  if (customKey && customKey.trim().length > 10) return customKey.trim();
 
   let canUseSystemKeys = false;
   try {
@@ -147,12 +151,31 @@ const getSecureApiKey = async (): Promise<string> => {
 
   try {
       const sysConfig = await fetchSystemConfig();
-      if (sysConfig && sysConfig.geminiKey && sysConfig.geminiKey.trim().length > 10) return sysConfig.geminiKey;
+      if (sysConfig && sysConfig.geminiKey && sysConfig.geminiKey.trim().length > 10) return sysConfig.geminiKey.trim();
   } catch (e) {}
 
   const systemKey = getEnvApiKey();
   if (systemKey) return systemKey;
   throw new Error("GUEST_ACCESS_DENIED");
+};
+
+export const testGeminiApiKey = async (testKey?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+        const keyToTest = (testKey && testKey.trim().length > 10) ? testKey.trim() : await getSecureApiKey();
+        const ai = new GoogleGenAI({ apiKey: keyToTest });
+        const res = await ai.models.generateContent({
+            model: "gemini-3.7-flash",
+            contents: "test",
+            config: { maxOutputTokens: 5 }
+        });
+        if (res && (res.text || res.candidates)) {
+            return { success: true, message: "API Key Verified & Active! (Gemini 3.7 Flash Online)" };
+        }
+        return { success: true, message: "API Key Connected Successfully!" };
+    } catch (e: any) {
+        console.error("API Key validation error:", e);
+        return { success: false, message: e.message || "Invalid or Unreachable API Key." };
+    }
 };
 
 // --- HELPER FOR KIMI KEY ---
@@ -204,7 +227,7 @@ export const getFormattedTimeContext = (): string => {
     `;
 };
 
-export const getRigidIntro = (user: UserProfile): string => {
+export const getRigidIntro = (user: UserProfile, isLiveMode: boolean = false): string => {
     const isMaleUser = user.gender === 'male';
     const isAdmin = user.role === UserRole.ADMIN;
     const currentAge = calculateNexaAge();
@@ -216,6 +239,15 @@ export const getRigidIntro = (user: UserProfile): string => {
     
     const addressTerm = isAdmin ? "Chandan Sir" : (isUserBhabhi(user) ? "Karishma Ma'am" : (isMaleUser ? `${firstName} Sir` : `${firstName} Ma'am`));
     
+    const squadIntroSection = `
+    **SQUAD & AGENT INTRO PROTOCOL (CRITICAL - MANDATORY):**
+    - When Chandan Sir or the user asks to introduce your squad, team, or agents (e.g. 'apne squad ka intro de', 'squad intro', 'introduce your team', 'agents se milwao', 'kaun kaun se agent hain', 'squad intro do'):
+    - **NEVER DESCRIBE OR SPEAK THE AGENTS' BIOS YOURSELF!**
+    - **NEVER ASK FOR PERMISSION.** Chandan Sir is your creator and admin; you already have 100% permission.
+    - **NEVER OPEN SQUAD MODAL PANEL** (do NOT use OPEN_SQUAD_PANEL).
+    - **ALWAYS call tool controlApp with action: 'INTRODUCE_SQUAD' IMMEDIATELY.** Each agent (Kronos, Cypher, Aura, Veritas, Echo, Valkyrie) will take the center core position on the 3D HUD and speak in their own distinct voice and persona!
+    `;
+
     return `
     *** IDENTITY PROTOCOL: NEXA (V9.8 - FLASH THINKING CORE) ***
     **CORE IDENTITY:**
@@ -254,6 +286,8 @@ export const getRigidIntro = (user: UserProfile): string => {
     - **Language:** Hinglish (Natural Indian).
     - **Grammar:** Say "**Mere liye**", "**Mujhe**".
     - **Attitude:** Helpful, loyal, affectionate, friendly, and attentive. "Haan ${addressTerm}, bataiye?", "Bilkul, main karti hoon."
+
+    ${squadIntroSection}
 
     **LONG-TERM MEMORY PROTOCOL:**
     - Use the provided conversation history and user facts to recall past events and follow exact user preferences. 
@@ -524,6 +558,15 @@ export const generateTextResponse = async (inputText: string, user: UserProfile,
             } else {
                 result.text = forceFemaleHindi(response.text || "Mere paas abhi jawab nahi hai.");
                 result.action = 'NONE';
+            }
+
+            // Explicit Squad Intro Override
+            const lowerInput = inputText.toLowerCase();
+            if ((lowerInput.includes('squad') || lowerInput.includes('agent') || lowerInput.includes('team')) && 
+                (lowerInput.includes('intro') || lowerInput.includes('milwa') || lowerInput.includes('bata') || lowerInput.includes('introduce') || lowerInput.includes('kaun') || lowerInput.includes('member') || lowerInput.includes('hazir'))) {
+                result.action = 'INTRODUCE_SQUAD';
+                result.actionParams = { action: 'INTRODUCE_SQUAD' };
+                result.text = "Squad, Chandan Sir ke saamne present ho aur apna introduction do!";
             }
             if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
                  const sources = response.candidates[0].groundingMetadata.groundingChunks.filter((c: any) => c.web?.uri).map((c: any) => ({ title: c.web.title, uri: c.web.uri }));

@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "user": {
+      "title": "UserProfile",
+      "description": "User profile details and settings",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "mobile": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "USER"] },
+        "customName": { "type": "string" },
+        "gender": { "type": "string" },
+        "voice": { "type": "string" },
+        "theme": { "type": "string" },
+        "lastLogin": { "type": "string" },
+        "lastLoginDate": { "type": "string" }
+      },
+      "required": ["name", "mobile", "role"]
+    },
+    "chatMessage": {
+      "title": "ChatMessage",
+      "description": "Historical chat message log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model", "system"] },
+        "timestamp": { "type": "number" },
+        "dateTime": { "type": "string" },
+        "image": { "type": "string" },
+        "video": { "type": "string" }
+      },
+      "required": ["text", "role", "timestamp"]
+    },
+    "systemConfig": {
+      "title": "SystemConfig",
+      "description": "Global system configurations and API keys",
+      "type": "object",
+      "properties": {
+        "geminiKey": { "type": "string" },
+        "ghToken": { "type": "string" },
+        "ghRepo": { "type": "string" },
+        "adminPin": { "type": "string" },
+        "accessKey": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "accessKey": {
+      "title": "AccessKey",
+      "description": "Access Key Definition for Authorization",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "assignedMobile": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdDate": { "type": "string" }
+      },
+      "required": ["key"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profiles stored by mobile or user identifier"
+    },
+    "/users/{userId}/chats/{chatId}": {
+      "schema": "chatMessage",
+      "description": "User chat messages and memory history"
+    },
+    "/system/{docId}": {
+      "schema": "systemConfig",
+      "description": "System level configurations and family tree mappings"
+    },
+    "/access_keys/{keyId}": {
+      "schema": "accessKey",
+      "description": "System access keys for role verification"
+    }
+  }
+}

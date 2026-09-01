@@ -1,5 +1,13 @@
-import { initializeApp } from "firebase/app";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { 
+  initializeFirestore, 
+  getFirestore,
+  persistentLocalCache, 
+  persistentMultipleTabManager, 
+  memoryLocalCache, 
+  setLogLevel,
+  Firestore
+} from "firebase/firestore";
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -14,6 +22,9 @@ import {
 import { getStorage } from "firebase/storage";
 import config from "../firebase-applet-config.json";
 
+// Silence informational warnings from Firestore in sandboxed/iframe preview
+setLogLevel('silent');
+
 // Web app's Firebase configuration loaded from environment provisioned file
 const firebaseConfig = {
   apiKey: config.apiKey,
@@ -24,31 +35,40 @@ const firebaseConfig = {
   appId: config.appId
 };
 
-// Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase App (HMR safe)
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with databaseId, forced long polling, and relaxed timeout for sandboxed environments
+// Initialize Firestore with configured databaseId and fallback cache
 const databaseId = config.firestoreDatabaseId || "(default)";
-let dbInstance;
+let dbInstance: Firestore;
+
 try {
+  // Use experimentalForceLongPolling for robust connectivity across sandboxed iframes & web proxies
   dbInstance = initializeFirestore(app, {
     experimentalForceLongPolling: true,
-    longPollingOptions: {
-      timeoutSeconds: 30
-    },
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   }, databaseId);
-} catch (e) {
-  dbInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-    localCache: memoryLocalCache()
-  }, databaseId);
+} catch (e: any) {
+  if (e.code === 'failed-precondition' || (e.message && e.message.includes('already been started'))) {
+    // If it's already started (common in HMR), just get the instance
+    dbInstance = getFirestore(app, databaseId);
+  } else {
+    try {
+      // Fallback to memory cache with forced long polling
+      dbInstance = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+        localCache: memoryLocalCache()
+      }, databaseId);
+    } catch (err: any) {
+      dbInstance = getFirestore(app, databaseId);
+    }
+  }
 }
-const db = dbInstance;
 
-const auth = getAuth(app);
-const storage = getStorage(app);
-const googleProvider = new GoogleAuthProvider();
+export const db = dbInstance;
+export const auth = getAuth(app);
+export const storage = getStorage(app);
+export const googleProvider = new GoogleAuthProvider();
 
 // Auth helper functions
 export const signInWithGoogle = async () => {
@@ -105,4 +125,4 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-export { app, db, auth, storage, googleProvider };
+export { app };

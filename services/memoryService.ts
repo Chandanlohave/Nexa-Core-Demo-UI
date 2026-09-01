@@ -139,6 +139,28 @@ export const syncFamilyTree = async () => {
 
 // --- SYSTEM CONFIG SYNC (KEYS & TOKENS) ---
 export const saveSystemConfig = async (config: { geminiKey?: string, ghToken?: string, ghRepo?: string, adminPin?: string, accessKey?: string, openaiKey?: string, kimiKey?: string, groqKey?: string }) => {
+    // 1. Immediately store in localStorage/sessionStorage for instant zero-latency access
+    if (config.geminiKey !== undefined) {
+        const cleanKey = config.geminiKey.trim();
+        if (cleanKey) {
+            localStorage.setItem('nexa_client_api_key', cleanKey);
+        } else {
+            localStorage.removeItem('nexa_client_api_key');
+        }
+    }
+    
+    if (config.ghToken !== undefined) {
+        const cleanToken = config.ghToken.trim();
+        if (cleanToken) sessionStorage.setItem('NEXA_GH_TOKEN', cleanToken);
+        else sessionStorage.removeItem('NEXA_GH_TOKEN');
+    }
+    if (config.ghRepo !== undefined) {
+        const cleanRepo = config.ghRepo.trim();
+        if (cleanRepo) sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
+        else sessionStorage.removeItem('NEXA_GH_REPO');
+    }
+
+    // 2. Persist to Firestore DB with merge
     try {
         await setDoc(doc(db, "system", "config"), {
             ...config,
@@ -146,14 +168,9 @@ export const saveSystemConfig = async (config: { geminiKey?: string, ghToken?: s
             lastUpdated: formatStdDate(new Date())
         }, { merge: true });
         
-        if (config.geminiKey) localStorage.setItem('nexa_client_api_key', config.geminiKey);
-        
-        if (config.ghToken) sessionStorage.setItem('NEXA_GH_TOKEN', config.ghToken);
-        if (config.ghRepo) sessionStorage.setItem('NEXA_GH_REPO', config.ghRepo);
-        
         syncFamilyTree();
     } catch (e) {
-        console.error("Failed to save system config to DB", e);
+        console.warn("Notice: Failed to write system config to Firestore (using local persistence):", e);
     }
 };
 
@@ -167,14 +184,21 @@ export const fetchSystemConfig = async () => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             
-            if (data.geminiKey) localStorage.setItem('nexa_client_api_key', data.geminiKey);
-            if (data.ghToken) sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken);
-            if (data.ghRepo) sessionStorage.setItem('NEXA_GH_REPO', data.ghRepo);
+            if (data.geminiKey && data.geminiKey.trim()) {
+                localStorage.setItem('nexa_client_api_key', data.geminiKey.trim());
+            }
+            if (data.ghToken && data.ghToken.trim()) sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
+            if (data.ghRepo && data.ghRepo.trim()) sessionStorage.setItem('NEXA_GH_REPO', data.ghRepo.trim());
             
             return data;
         }
     } catch (e) {
-        // Silent fail
+        // Fallback to locally stored key
+    }
+
+    const localKey = localStorage.getItem('nexa_client_api_key');
+    if (localKey) {
+        return { geminiKey: localKey };
     }
     return null;
 };

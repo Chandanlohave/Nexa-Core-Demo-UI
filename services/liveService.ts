@@ -1,8 +1,38 @@
 
-import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality, Blob, FunctionDeclaration, Type } from "@google/genai";
 import { UserProfile, UserRole, VoiceKey } from "../types";
-import { getRigidIntro, getCurrentLocation, isUserBhabhi, generateIntroductoryMessage, controlAppTool, modifyCodeTool, getFormattedTimeContext, forceFemaleHindi } from "./geminiService";
+import { getRigidIntro, getCurrentLocation, isUserBhabhi, generateIntroductoryMessage, modifyCodeTool, getFormattedTimeContext, forceFemaleHindi } from "./geminiService";
 import { getMemoryForPrompt, getFacts, syncMemoryWithCloud } from "./memoryService";
+
+export const liveControlAppTool: FunctionDeclaration = {
+  name: 'controlApp',
+  description: 'Control the NEXA visual interface, HUD theme, colors, panels, and highlight squad agents on the 3D core.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      action: { 
+        type: Type.STRING, 
+        enum: [
+          'THEME_DARK', 
+          'THEME_LIGHT', 
+          'CHANGE_COLOR', 
+          'OPEN_STUDY_HUB', 
+          'OPEN_ADMIN_PANEL', 
+          'OPEN_SETTINGS', 
+          'CLOSE_PANELS', 
+          'HIGHLIGHT_AGENT',
+          'OPEN_SQUAD_PANEL',
+          'INTRODUCE_SQUAD',
+          'LOGOUT'
+        ], 
+        description: 'The specific UI action.' 
+      },
+      color: { type: Type.STRING, description: 'Target color name if action is CHANGE_COLOR.' },
+      agentId: { type: Type.STRING, description: 'Target agent ID for HIGHLIGHT_AGENT (e.g. agent_kronos, agent_cypher, agent_aura, agent_veritas, agent_echo, agent_valkyrie).' }
+    },
+    required: ['action'],
+  },
+};
 
 // --- SECURITY DICTIONARIES ---
 const TARGET_KEYWORDS = ['chandan', 'chandan sir', 'admin', 'creator', 'boss', 'sir', 'lohave', 'malik', 'owner', 'baap'];
@@ -112,11 +142,22 @@ export class LiveSessionManager {
   private isBuffering = false;
   private reconnectAttempts = 0;
   private framesSent = 0;
+  private isExternalSpeechActive = false;
   
   constructor(user: UserProfile, naughtyModeOverride: boolean, callbacks: LiveSessionCallbacks) {
     this.user = user;
     this.naughtyMode = naughtyModeOverride;
     this.callbacks = callbacks;
+  }
+
+  public pauseAudioForExternalSpeech(): void {
+    this.isExternalSpeechActive = true;
+    this.interruptPlayback();
+  }
+
+  public resumeAudioAfterExternalSpeech(): void {
+    this.isExternalSpeechActive = false;
+    this.interruptPlayback();
   }
 
   public async updateVoice(voice: VoiceKey) {
@@ -133,7 +174,7 @@ export class LiveSessionManager {
   
   private checkApiKey = () => {
     const customKey = localStorage.getItem('nexa_client_api_key');
-    if (customKey && customKey.trim().length > 10) return customKey;
+    if (customKey && customKey.trim().length > 10) return customKey.trim();
 
     try {
         const userStr = localStorage.getItem('nexa_user');
@@ -146,13 +187,13 @@ export class LiveSessionManager {
         if(e.message === "USER_API_KEY_REQUIRED") throw e;
     }
 
-    const systemKey = process.env.API_KEY;
-    if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
+    const systemKey = process.env.API_KEY || (process.env as any).GEMINI_API_KEY || (import.meta as any).env?.VITE_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (systemKey && systemKey !== "undefined" && systemKey !== "null" && systemKey.trim() !== '') return systemKey.trim();
     throw new Error("GUEST_ACCESS_DENIED");
   };
 
   private async buildSystemInstruction(): Promise<string> {
-    const rigidIntro = getRigidIntro(this.user).replace(/Lohave/gi, "लोहवे").replace(/Chandan/gi, "चंदन"); 
+    const rigidIntro = getRigidIntro(this.user, true).replace(/Lohave/gi, "लोहवे").replace(/Chandan/gi, "चंदन"); 
     const timeContext = getFormattedTimeContext();
     
     let memoryContext = "";
@@ -197,6 +238,12 @@ export class LiveSessionManager {
     1. **YOU ARE FEMALE.** Your voice is sweet, clear, natural female (${this.user.voice || 'Aoede'}).
     2. **GRAMMAR:** ALWAYS use female grammar ("Karti hoon", "Sakti hoon", "Jaungi", "Dekhungi"). NEVER use male grammar ("Karta hoon", "Sakta hoon").
     
+    **SQUAD & AGENT INTRO PROTOCOL (LIVE REALTIME API):**
+    When Chandan Sir or the user asks to introduce your squad, team, or agents (e.g., 'apne squad ka intro de', 'squad intro', 'introduce your team', 'agents se milwao', 'kaun kaun se agent hain'):
+    1. DO NOT speak! DO NOT introduce the squad members yourself! DO NOT say "Bilkul Chandan Sir"!
+    2. Respond SILENTLY by IMMEDIATELY calling the tool 'controlApp' with 'action="INTRODUCE_SQUAD"'.
+    3. The system will handle the local TTS for both you and your agents. You must just trigger the tool. THIS IS MANDATORY!
+
     **NATURAL CONVERSATIONAL PACE & STYLE:**
     1. Speak calmly, warmly, and naturally like a real human friend sitting next to the user.
     2. Do NOT speak too fast. Do NOT read like a script or a robot.
@@ -268,7 +315,7 @@ export class LiveSessionManager {
                 inputAudioTranscription: { languageCodes: ['en-IN'] },
                 outputAudioTranscription: { languageCodes: ['en-IN'] },
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } } },
-                tools: [{ functionDeclarations: [controlAppTool, modifyCodeTool] }]
+                tools: [{ functionDeclarations: [liveControlAppTool, modifyCodeTool] }]
             },
             callbacks: {
                 onopen: this.handleSessionOpen.bind(this),
@@ -422,14 +469,28 @@ export class LiveSessionManager {
              this.stop(); 
              return;
           }
+
+          if ((lowerText.includes('squad') || lowerText.includes('agent') || lowerText.includes('team')) && (lowerText.includes('intro') || lowerText.includes('milwa') || lowerText.includes('bata') || lowerText.includes('introduce'))) {
+             this.pauseAudioForExternalSpeech();
+             this.callbacks.onAction('INTRODUCE_SQUAD', {});
+             this.currentInputTranscription = '';
+             return;
+          }
       }
 
-      if (message.serverContent?.interrupted) { this.interruptPlayback(); return; }
+      if (message.serverContent?.interrupted) { 
+          this.interruptPlayback(); 
+          this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: null });
+          return; 
+      }
 
       if (message.toolCall?.functionCalls) {
           for (const fc of message.toolCall.functionCalls) {
               if (fc.name === 'controlApp') {
                   const args = fc.args as any;
+                  if (args.action === 'INTRODUCE_SQUAD') {
+                      this.pauseAudioForExternalSpeech();
+                  }
                   this.callbacks.onAction(args.action, args);
                   if (this.sessionPromise) {
                       this.sessionPromise.then(s => {
@@ -440,12 +501,33 @@ export class LiveSessionManager {
           }
       }
 
+      if (this.isExternalSpeechActive) {
+          // Drop streaming audio chunks while individual squad agents speak via dedicated TTS
+          return;
+      }
+
       if (message.serverContent?.outputTranscription) {
           const rawText = message.serverContent.outputTranscription.text;
           if (rawText) {
               const fixedText = forceFemaleHindi(rawText);
               this.currentOutputTranscription += fixedText;
               this.callbacks.onTranscriptionUpdate(this.currentInputTranscription, this.currentOutputTranscription);
+              
+              // Real-time Agent Spotlighting on 3D Hologram as Live Voice Mentions Each Member
+              const upper = rawText.toUpperCase();
+              if (upper.includes('KRONOS')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_kronos' });
+              } else if (upper.includes('CYPHER')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_cypher' });
+              } else if (upper.includes('AURA')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_aura' });
+              } else if (upper.includes('VERITAS')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_veritas' });
+              } else if (upper.includes('ECHO')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_echo' });
+              } else if (upper.includes('VALKYRIE')) {
+                  this.callbacks.onAction('HIGHLIGHT_AGENT', { agentId: 'agent_valkyrie' });
+              }
           }
       }
 
@@ -465,7 +547,12 @@ export class LiveSessionManager {
       }
   }
 
-  private handleSessionError(error: ErrorEvent): void { }
+  private handleSessionError(error: any): void {
+      console.warn("Gemini Live Session event:", error);
+      if (!this.isStopping) {
+          this.callbacks.onStateChange('error');
+      }
+  }
 
   private handleSessionClose(event: CloseEvent): void {
       if (this.isStopping) {

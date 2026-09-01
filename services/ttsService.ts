@@ -62,7 +62,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const checkApiKey = () => {
   const customKey = localStorage.getItem('nexa_client_api_key');
-  if (customKey && customKey.trim().length > 10) return customKey;
+  if (customKey && customKey.trim().length > 10) return customKey.trim();
 
   try {
       const userStr = localStorage.getItem('nexa_user');
@@ -76,8 +76,8 @@ const checkApiKey = () => {
       if(e.message === "USER_API_KEY_REQUIRED") throw e;
   }
   
-  const systemKey = process.env.API_KEY;
-  if (systemKey && systemKey !== "undefined" && systemKey.trim() !== '') return systemKey;
+  const systemKey = process.env.API_KEY || (process.env as any).GEMINI_API_KEY || (import.meta as any).env?.VITE_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  if (systemKey && systemKey !== "undefined" && systemKey !== "null" && systemKey.trim() !== '') return systemKey.trim();
   throw new Error("GUEST_ACCESS_DENIED");
 };
 
@@ -317,39 +317,72 @@ export const speakAgentText = async (
     TEXT: "${pronunciationText}"
     INSTRUCTIONS:
     1. ${voiceInstruction}
-    2. ACCENT: Indian English / Hinglish.
-    3. SPEAKING PACE: Calm, steady, professional conversational pace. Pause at commas.
+    2. ACCENT & TONE: Highly realistic Indian accent (Hinglish/Hindi). Act like a real human assistant.
+    3. DELIVERY: Do not sound like a robotic announcer. Use natural breathing pauses at commas. Speak warmly, naturally, and with conversational fluidity.
     `;
 
-    try {
-        const apiKey = checkApiKey();
-        const ai = new GoogleGenAI({ apiKey });
+    let lastError: any = null;
+    const maxRetries = 3;
 
-        const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-tts-preview",
-            contents: [{ parts: [{ text: ttsPrompt }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceKey } } },
-            },
-        });
-
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
         if (mySessionId !== currentSessionId) return;
+        try {
+            const apiKey = checkApiKey();
+            const ai = new GoogleGenAI({ apiKey });
 
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) throw new Error("No agent audio data");
+            const response = await ai.models.generateContent({
+                model: "gemini-3.1-flash-tts-preview",
+                contents: [{ parts: [{ text: ttsPrompt }] }],
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceKey } } },
+                },
+            });
 
-        const audioBytes = decodeBase64(base64Audio);
-        const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
+            if (mySessionId !== currentSessionId) return;
 
-        if (mySessionId !== currentSessionId) return;
+            const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            if (!base64Audio) throw new Error("No agent audio data");
 
-        playAudioBuffer(audioBuffer, mySessionId, onStart, onEnd);
-    } catch (e) {
-        console.warn("Agent TTS error, falling back:", e);
-        if (mySessionId === currentSessionId) {
-            onEnd();
+            const audioBytes = decodeBase64(base64Audio);
+            const audioBuffer = await decodePcmAudioData(audioBytes, audioCtx);
+
+            if (mySessionId !== currentSessionId) return;
+
+            playAudioBuffer(audioBuffer, mySessionId, onStart, onEnd);
+            return;
+        } catch (e: any) {
+            lastError = e;
+            console.warn(`Agent TTS error (Attempt ${attempt}):`, e);
+            if (mySessionId !== currentSessionId) return;
+            if (attempt < maxRetries) {
+                await delay(attempt * 1500); // Wait 1.5 seconds before retrying
+            }
         }
+    }
+
+    console.warn("Agent TTS final failure, falling back to Web Speech:", lastError);
+    if (mySessionId !== currentSessionId) return;
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'hi-IN';
+            utter.rate = 0.95;
+            utter.pitch = voiceGender === 'Male' ? 0.85 : 1.15;
+            utter.onstart = () => { if (mySessionId === currentSessionId) onStart(); };
+            utter.onend = () => { if (mySessionId === currentSessionId) onEnd(); };
+            utter.onerror = () => { if (mySessionId === currentSessionId) onEnd(); };
+            window.speechSynthesis.speak(utter);
+            return;
+        } catch (err) {
+            console.warn("Web Speech failed:", err);
+        }
+    }
+    
+    if (mySessionId === currentSessionId) {
+        onEnd();
     }
 };
 

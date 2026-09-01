@@ -18,7 +18,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 2, 6],
     pulseOffset: 0.1,
     activityLevel: 0.95,
-    introText: "Namaste Chandan Sir! Main KRONOS hoon, aapka Business Analytics Specialist. Market graphs, revenue trends, aur strategic recommendations ko main real-time analyze karta hoon!"
+    introText: "Kronos online. Sir, aapke business analytics aur data tracking ka charge mere paas hai. Market trends se lekar complex revenue insights tak, main sab kuch real-time handle kar lunga."
   },
   {
     id: 'agent_cypher',
@@ -36,7 +36,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 1, 3],
     pulseOffset: 0.25,
     activityLevel: 0.9,
-    introText: "Hello Chandan Sir! CYPHER reporting for duty. Main Code Compiler aur Syntax Inspector hoon. Code refactoring, live debugging, aur high-performance execution mera specialty hai!"
+    introText: "Cypher here, Sir. Main aapka backend aur syntax inspector hoon. Agar code mein koi bhi bug ho, ya complex architecture build karna ho, leave the heavy lifting to me."
   },
   {
     id: 'agent_aura',
@@ -54,7 +54,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 2, 4],
     pulseOffset: 0.4,
     activityLevel: 0.85,
-    introText: "Namaste Chandan Sir! Main AURA, Vision AI. Real-time optical camera feed, document OCR, aur visual scene understanding ko main live perceive karti hoon!"
+    introText: "Hello Sir, main Aura. Meri specialty visual intelligence hai. Aapke camera feeds, images aur scene understanding ko process karke, main aapko real-time insights dungi."
   },
   {
     id: 'agent_veritas',
@@ -63,7 +63,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     specialty: 'Search Grounding, Live News Retrieval & Document Verification',
     status: 'SEARCH GROUNDING // CONNECTED',
     metric: '100+ Live Sources • Real-time Verification',
-    color: '#06B6D4',
+    color: '#EC4899',
     voice: 'Aoede',
     voiceGender: 'Female',
     x: 0,
@@ -72,7 +72,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 3, 5],
     pulseOffset: 0.55,
     activityLevel: 0.92,
-    introText: "Greetings Chandan Sir! Main VERITAS, aapki Deep Web Research Specialist. Search grounding, latest news, aur live facts checking mera main domain hai!"
+    introText: "Veritas reporting, Sir. Main deep web research aur fact-checking handle karti hoon. Agar aapko duniya bhar ki latest news ya grounded data chahiye, I am your agent."
   },
   {
     id: 'agent_echo',
@@ -90,7 +90,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 4, 6],
     pulseOffset: 0.7,
     activityLevel: 0.88,
-    introText: "Hey Chandan Sir! Main ECHO, Task & Workflow Manager. Aapke daily schedules, task prioritization, aur operational workflow ko main flawlessly manage karta hoon!"
+    introText: "Echo online! Sir, aapka time aur tasks manage karna meri zimmedari hai. Scheduling se lekar priority queues tak, I'll keep your workflow flawless."
   },
   {
     id: 'agent_valkyrie',
@@ -108,7 +108,7 @@ export const NEXA_SQUAD_AGENTS: NexaAgentNode[] = [
     connections: [0, 1, 5],
     pulseOffset: 0.85,
     activityLevel: 0.98,
-    introText: "Security Guard VALKYRIE online! Chandan Sir, access control, encrypted memory vault, aur system firewall fully active aur secure hain!"
+    introText: "Valkyrie standing by. Sir, aapke system ki security aur access control mere haath me hai. Data vaults aur firewall hamesha active rahenge."
   }
 ];
 
@@ -120,36 +120,40 @@ export interface SquadIntroState {
 
 /**
  * Triggers full sequential squad introduction:
- * 1. Nexa introduces her 6-agent team.
- * 2. Each agent speaks in their individual voice with active 3D HUD highlight!
+ * 1. Nexa introduces her AI Agent Squad.
+ * 2. Each agent takes center core position on 3D HUD & speaks in their individual voice!
  */
 export const startSquadIntroSequence = async (
   user: UserProfile,
+  customAgents: NexaAgentNode[] = [],
   onAgentHighlight: (agentId: string | null) => void,
-  onComplete: () => void
+  onComplete: () => void,
+  isLiveMode: boolean = false
 ) => {
   stop();
 
+  const allAgents = [...NEXA_SQUAD_AGENTS, ...customAgents];
+
   // Nexa Core Opening Statement
-  const nexaOpening = "Bilkul Chandan Sir! Main aapse apni specialized 6-AI Agent Squad ko milwati hoon. Har agent ke paas apna dedicated expertise aur unique voice profile hai. Aaiye ek-ek karke sabse milte hain!";
-
+  const nexaOpening = "Haan Chandan Sir, bilkul. Main aapse apni core team aur specialized agents ko milwati hoon. Guys, please go ahead and introduce yourselves to Sir.";
+  
   onAgentHighlight('agent_core');
-
+  
   await new Promise<void>((resolve) => {
     speak(user, nexaOpening, false, () => {}, () => resolve());
   });
 
-  // Cycle through each of the 6 agents
-  for (let i = 0; i < NEXA_SQUAD_AGENTS.length; i++) {
-    const agent = NEXA_SQUAD_AGENTS[i];
+  // Cycle through each agent (Each takes center core position & speaks in distinct voice)
+  for (let i = 0; i < allAgents.length; i++) {
+    const agent = allAgents[i];
     onAgentHighlight(agent.id);
 
     await new Promise<void>((resolve) => {
       speakAgentText(
         user,
-        agent.introText,
-        agent.voice,
-        agent.voiceGender,
+        agent.introText || `Sir, main ${agent.name} hoon, ${agent.role}. Aapke commands execute karne ke liye ready hoon.`,
+        agent.voice || 'Fenrir',
+        agent.voiceGender || 'Male',
         () => {},
         () => resolve()
       );
@@ -158,7 +162,7 @@ export const startSquadIntroSequence = async (
 
   // Final concluding note by Nexa
   onAgentHighlight('agent_core');
-  const nexaClosing = "Aap jab bhi chahein, inme se kisi bhi agent ko specific task ke liye invoke kar sakte hain Chandan Sir!";
+  const nexaClosing = "Toh ye thi meri team Chandan Sir. Jab bhi kisi specialized task ki zarurat ho, aap sidhe inhe command de sakte hain.";
   
   await new Promise<void>((resolve) => {
     speak(user, nexaClosing, false, () => {}, () => resolve());

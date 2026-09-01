@@ -221,7 +221,7 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         role: 'Deep Web Research & Fact-Checker',
         status: 'SEARCH GROUNDING // CONNECTED',
         metric: '100+ Live Sources',
-        color: '#06B6D4',
+        color: '#EC4899',
         x: 0,
         y: 185,
         z: -10,
@@ -694,10 +694,14 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       let coreTitle = 'NEXA CORE';
       let coreStatus = '● ONLINE';
 
-      if (activeAgent) {
+      if (activeHighlightAgentId === 'agent_core') {
+        coreColor = '#29DFFF';
+        coreTitle = 'NEXA (CORE)';
+        coreStatus = '● SQUAD ORCHESTRATOR';
+      } else if (activeAgent) {
         coreColor = activeAgent.color;
         coreTitle = activeAgent.name;
-        coreStatus = `● ${activeAgent.role.slice(0, 16).toUpperCase()}`;
+        coreStatus = `● ${activeAgent.role.toUpperCase()}`;
       } else if (state === HUDState.LIVE) {
         coreColor = '#10B981'; // Neon Emerald Green
         coreTitle = 'LIVE MODE';
@@ -1010,13 +1014,46 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
         ctx.shadowBlur = 8;
         ctx.fillText(agent.name, textX, textY);
 
-        // Expanded Holographic Card on Selection/Highlight
+        // Expanded Holographic Card on Selection/Highlight (Positioned strictly outward away from central core)
         const isSelected = closestAgentId === agent.id || isHighlighted;
         if (isSelected) {
-          const cardW = Math.min(180, width * 0.42);
-          const cardH = 48;
-          const badgeX = isLeft ? textX - cardW : (isTop || isBottom ? x - cardW / 2 : textX);
-          const badgeY = isTop ? textY - cardH - 12 : (isBottom ? textY + 8 : textY + 16);
+          const cardW = Math.min(168, width * 0.40);
+          const cardH = 44;
+          
+          // Position card strictly away from center core orb
+          const isLeft = x < centerX;
+          const isTop = y < centerY;
+          
+          let rawBadgeX = isLeft 
+            ? x - cardW - 10 * scaleBase 
+            : x + 10 * scaleBase;
+            
+          let rawBadgeY = isTop 
+            ? y - cardH - 6 * scaleBase 
+            : y + 8 * scaleBase;
+
+          // Safe bounds checking
+          let badgeX = Math.max(10, Math.min(width - cardW - 10, rawBadgeX));
+          let badgeY = Math.max(60, Math.min(height - cardH - 80, rawBadgeY));
+
+          // If on mobile screen space is tight and card gets too close to center orb, push it further outward to edges
+          const cardCenterX = badgeX + cardW / 2;
+          const cardCenterY = badgeY + cardH / 2;
+          const distToCore = Math.hypot(cardCenterX - centerX, cardCenterY - centerY);
+          const safeCoreDist = activeCoreR + 35;
+          
+          if (distToCore < safeCoreDist) {
+            if (isLeft) {
+              badgeX = Math.max(8, x - cardW - 12);
+            } else {
+              badgeX = Math.min(width - cardW - 8, x + 12);
+            }
+            if (isTop) {
+              badgeY = Math.max(56, y - cardH - 12);
+            } else {
+              badgeY = Math.min(height - cardH - 80, y + 16);
+            }
+          }
 
           ctx.fillStyle = 'rgba(3, 7, 18, 0.94)';
           ctx.strokeStyle = agent.color;
@@ -1024,18 +1061,22 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
           ctx.shadowColor = agent.color;
           ctx.shadowBlur = 12;
           ctx.beginPath();
-          ctx.roundRect(badgeX, badgeY, cardW, cardH, 6);
+          if (typeof ctx.roundRect === 'function') {
+            ctx.roundRect(badgeX, badgeY, cardW, cardH, 6);
+          } else {
+            ctx.rect(badgeX, badgeY, cardW, cardH);
+          }
           ctx.fill();
           ctx.stroke();
 
           ctx.textAlign = 'left';
           ctx.font = '600 8.5px Rajdhani, monospace';
           ctx.fillStyle = '#38BDF8';
-          ctx.fillText(agent.status, badgeX + 8, badgeY + 18);
+          ctx.fillText(agent.status, badgeX + 8, badgeY + 16);
 
           ctx.font = '400 8px Rajdhani, monospace';
           ctx.fillStyle = '#94A3B8';
-          ctx.fillText(agent.metric, badgeX + 8, badgeY + 34);
+          ctx.fillText(agent.metric, badgeX + 8, badgeY + 31);
         }
 
         ctx.restore();

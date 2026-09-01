@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
+import { AgentVirtualOffice } from './components/AgentVirtualOffice';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
 import UserSettingsPanel from './components/UserSettingsPanel';
@@ -292,6 +293,14 @@ const App: React.FC = () => {
         setConfig: (c: any) => {},
         setShowAdmin: (show: boolean) => {},
         setShowSquad: (show: boolean) => {},
+        setShowChat: (show: boolean) => {},
+        setHudState: (state: HUDState) => {},
+        setActiveHighlightAgentId: (id: string | null) => {},
+        cleanupCamera: () => {},
+        setLiveSession: (session: any) => {},
+        user: null as UserProfile | null,
+        customAgents: [] as any[],
+        liveSession: null as LiveSessionManager | null,
         userRole: UserRole.USER as UserRole
     });
 
@@ -305,15 +314,36 @@ const App: React.FC = () => {
                     case 'LOGOUT': callbacksRef.current.handleLogout(); break;
                     case 'THEME_DARK': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'dark'})); break;
                     case 'THEME_LIGHT': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'light'})); break;
+                    case 'HIGHLIGHT_AGENT':
+                        callbacksRef.current.setActiveHighlightAgentId(params?.agentId || null);
+                        break;
                     case 'OPEN_ADMIN_PANEL': if(callbacksRef.current.userRole === UserRole.ADMIN) callbacksRef.current.setShowAdmin(true); break;
                     case 'OPEN_SQUAD_PANEL': callbacksRef.current.setShowSquad(true); break;
                     case 'INTRODUCE_SQUAD': 
-                        callbacksRef.current.setShowSquad(true); 
-                        if (user) {
+                        if (callbacksRef.current.liveSession) {
+                            callbacksRef.current.liveSession.pauseAudioForExternalSpeech();
+                        }
+                        callbacksRef.current.setShowSquad(false); 
+                        callbacksRef.current.setShowChat(false);
+                        if (callbacksRef.current.user) {
+                            callbacksRef.current.setHudState(HUDState.SPEAKING);
                             startSquadIntroSequence(
-                                user, 
-                                (agentId) => setActiveHighlightAgentId(agentId), 
-                                () => setActiveHighlightAgentId(null)
+                                callbacksRef.current.user, 
+                                callbacksRef.current.customAgents,
+                                (agentId) => {
+                                    callbacksRef.current.setActiveHighlightAgentId(agentId);
+                                    callbacksRef.current.setHudState(HUDState.SPEAKING);
+                                }, 
+                                () => {
+                                    callbacksRef.current.setActiveHighlightAgentId(null);
+                                    if (callbacksRef.current.liveSession) {
+                                        callbacksRef.current.liveSession.resumeAudioAfterExternalSpeech();
+                                        callbacksRef.current.setHudState(HUDState.LIVE);
+                                    } else {
+                                        callbacksRef.current.setHudState(HUDState.IDLE);
+                                    }
+                                },
+                                !!callbacksRef.current.liveSession
                             );
                         }
                         break;
@@ -632,6 +662,14 @@ const App: React.FC = () => {
         callbacksRef.current.setConfig = setConfig;
         callbacksRef.current.setShowAdmin = setShowAdmin;
         callbacksRef.current.setShowSquad = setShowSquad;
+        callbacksRef.current.setShowChat = setShowChat;
+        callbacksRef.current.setHudState = setHudState;
+        callbacksRef.current.setActiveHighlightAgentId = setActiveHighlightAgentId;
+        callbacksRef.current.cleanupCamera = cleanupCamera;
+        callbacksRef.current.setLiveSession = setLiveSession;
+        callbacksRef.current.user = user;
+        callbacksRef.current.customAgents = customAgents;
+        callbacksRef.current.liveSession = liveSession;
         callbacksRef.current.userRole = user?.role || UserRole.USER;
     });
 
@@ -790,6 +828,13 @@ const App: React.FC = () => {
                                 />
                             </div>
                         )}
+                    </div>
+
+                    <div className="z-20 pointer-events-auto w-full">
+                        <AgentVirtualOffice 
+                            activeAgentId={activeHighlightAgentId} 
+                            hudState={hudState} 
+                        />
                     </div>
 
                     <ControlDeck 

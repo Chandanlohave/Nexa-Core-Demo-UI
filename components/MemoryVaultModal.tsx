@@ -29,7 +29,7 @@ export const MemoryVaultModal: React.FC<MemoryVaultModalProps> = ({ user, onClos
   const loadMemories = () => {
     const rawMsgs = getLocalMessages(user);
     const parsed: MemoryEntry[] = rawMsgs.map((m, idx) => ({
-      id: `mem_${m.timestamp || idx}`,
+      id: `vault_mem_${m.timestamp || Date.now()}_${idx}_${Math.random().toString(36).substring(2, 9)}`,
       role: m.role,
       text: m.text,
       timestamp: m.timestamp || Date.now(),

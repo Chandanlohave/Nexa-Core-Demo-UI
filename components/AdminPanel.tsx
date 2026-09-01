@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppConfig, UserFact, UserProfile, VOICES, VoiceKey, Reminder, AccessKeyDefinition } from '../types';
 import { getFacts, deleteFact, getUserProfile, syncUserProfile, fetchSystemConfig, saveSystemConfig, createCustomAccessKey, getAccessKeys, deleteAccessKey } from '../services/memoryService';
+import { testGeminiApiKey } from '../services/geminiService';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -46,6 +47,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
   
   const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SUCCESS'>('IDLE');
   const [ghStatus, setGhStatus] = useState<'UNKNOWN' | 'TESTING' | 'SUCCESS' | 'FAILED'>('UNKNOWN');
+  const [apiTestStatus, setApiTestStatus] = useState<'IDLE' | 'TESTING' | 'SUCCESS' | 'FAILED'>('IDLE');
+  const [apiTestMessage, setApiTestMessage] = useState<string>('');
   
   const [taskInput, setTaskInput] = useState('');
 
@@ -179,15 +182,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
   const handleSaveConfig = async () => {
     setSaveStatus('SAVING');
     
+    // Immediately persist to local storage first for instantaneous availability
+    const cleanKey = apiKeyInput.trim();
+    if (cleanKey) {
+        localStorage.setItem('nexa_client_api_key', cleanKey);
+    } else {
+        localStorage.removeItem('nexa_client_api_key');
+    }
+    
     await saveSystemConfig({
-        geminiKey: apiKeyInput.trim(),
+        geminiKey: cleanKey,
         ghToken: ghToken.trim(),
         ghRepo: ghRepo.trim(),
         adminPin: adminPinInput.trim(),
         accessKey: accessKeyInput.trim(),
         openaiKey: openaiKeyInput.trim(),
         kimiKey: kimiKeyInput.trim(),
-        groqKey: groqKeyInput.trim(), // NEW
+        groqKey: groqKeyInput.trim(),
     });
     
     setIsTokenSaved(!!ghToken.trim());
@@ -199,14 +210,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
   };
   
   const handleResetApiKey = async () => {
-      // Clear from local storage
       localStorage.removeItem('nexa_client_api_key');
       setApiKeyInput('');
+      setApiTestStatus('IDLE');
+      setApiTestMessage('');
       
-      // Clear from DB by saving empty string
       await saveSystemConfig({ geminiKey: '' });
       
       alert("API Key Reset. System will now use the Environment Variable Key (if available).");
+  };
+
+  const handleTestGeminiKey = async () => {
+      setApiTestStatus('TESTING');
+      setApiTestMessage('Testing API Key with Gemini 3.7 Flash...');
+      const cleanKey = apiKeyInput.trim();
+      const res = await testGeminiApiKey(cleanKey || undefined);
+      if (res.success) {
+          setApiTestStatus('SUCCESS');
+          setApiTestMessage(res.message);
+          // If valid, also auto-save it
+          if (cleanKey) {
+              localStorage.setItem('nexa_client_api_key', cleanKey);
+          }
+      } else {
+          setApiTestStatus('FAILED');
+          setApiTestMessage(res.message);
+      }
   };
 
   const testGithubConnection = async () => {
@@ -527,22 +556,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ isOpen, onClose, config, onConf
           </div>
           
           <div className="relative">
-            <label className="block text-zinc-500 text-[10px] font-mono mb-1">Gemini API Key</label>
-            <input 
-              type="password"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Paste Gemini API Key"
-              className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs text-white p-2 font-mono focus:border-nexa-cyan focus:outline-none" 
-            />
-            {apiKeyInput && (
-                <button 
-                    onClick={handleResetApiKey}
-                    className="absolute right-1 top-6 bg-red-600 text-white text-[8px] px-2 py-1 rounded hover:bg-red-500"
-                    title="Clear saved key and use environment default"
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-zinc-500 text-[10px] font-mono">Gemini API Key</label>
+              <span className="text-[9px] font-mono text-zinc-400">
+                {apiKeyInput ? `Configured (${apiKeyInput.slice(0, 6)}...${apiKeyInput.slice(-4)})` : 'Using System Default'}
+              </span>
+            </div>
+            <div className="relative">
+              <input 
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => {
+                  setApiKeyInput(e.target.value);
+                  setApiTestStatus('IDLE');
+                  setApiTestMessage('');
+                }}
+                placeholder="Paste Gemini API Key (e.g. AIzaSy...)"
+                className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs text-black dark:text-white p-2 pr-28 font-mono focus:border-nexa-cyan focus:outline-none" 
+              />
+              <div className="absolute right-1 top-1.5 flex gap-1">
+                <button
+                  type="button"
+                  onClick={handleTestGeminiKey}
+                  disabled={apiTestStatus === 'TESTING'}
+                  className={`text-[8px] font-mono px-2 py-1 uppercase rounded transition-colors ${apiTestStatus === 'TESTING' ? 'bg-yellow-600 text-black animate-pulse' : apiTestStatus === 'SUCCESS' ? 'bg-green-600 text-white' : apiTestStatus === 'FAILED' ? 'bg-red-600 text-white' : 'bg-nexa-cyan/20 border border-nexa-cyan/50 text-nexa-cyan hover:bg-nexa-cyan hover:text-black'}`}
+                  title="Verify if this API key is valid and responsive"
                 >
-                    RESET TO DEFAULT
+                  {apiTestStatus === 'TESTING' ? 'TESTING...' : apiTestStatus === 'SUCCESS' ? '✓ VALID' : apiTestStatus === 'FAILED' ? '✕ FAILED' : 'TEST KEY'}
                 </button>
+                {apiKeyInput && (
+                  <button 
+                    type="button"
+                    onClick={handleResetApiKey}
+                    className="bg-red-600 text-white text-[8px] font-mono px-1.5 py-1 rounded hover:bg-red-500"
+                    title="Clear saved key and revert to system default"
+                  >
+                    RESET
+                  </button>
+                )}
+              </div>
+            </div>
+            {apiTestMessage && (
+              <p className={`text-[9px] font-mono mt-1 ${apiTestStatus === 'SUCCESS' ? 'text-green-400' : 'text-red-400'}`}>
+                {apiTestMessage}
+              </p>
             )}
           </div>
           

@@ -52,7 +52,7 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
       case 'agent_kronos': return <BarChart3 className="w-5 h-5 text-amber-400" />;
       case 'agent_cypher': return <Code2 className="w-5 h-5 text-emerald-400" />;
       case 'agent_aura': return <Eye className="w-5 h-5 text-purple-400" />;
-      case 'agent_veritas': return <Search className="w-5 h-5 text-cyan-400" />;
+      case 'agent_veritas': return <Search className="w-5 h-5 text-pink-500" />;
       case 'agent_echo': return <Clock className="w-5 h-5 text-orange-400" />;
       case 'agent_valkyrie': return <ShieldCheck className="w-5 h-5 text-red-400" />;
       default: return <Cpu className="w-5 h-5 text-cyan-400" />;
@@ -75,11 +75,13 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
     setIsPlayingSequence(true);
     await startSquadIntroSequence(
       user,
+      [],
       (agentId) => setActiveHighlightAgentId(agentId),
       () => {
         setIsPlayingSequence(false);
         setActiveHighlightAgentId(null);
-      }
+      },
+      false
     );
   };
 
