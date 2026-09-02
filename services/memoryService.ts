@@ -138,10 +138,22 @@ export const syncFamilyTree = async () => {
 };
 
 // --- SYSTEM CONFIG SYNC (KEYS & TOKENS) ---
-export const saveSystemConfig = async (config: { geminiKey?: string, ghToken?: string, ghRepo?: string, adminPin?: string, accessKey?: string, openaiKey?: string, kimiKey?: string, groqKey?: string }) => {
-    // 1. Immediately store in localStorage/sessionStorage for instant zero-latency access
+export const saveSystemConfig = async (config: { 
+    geminiKey?: string, 
+    ghToken?: string, 
+    ghRepo?: string, 
+    adminPin?: string, 
+    accessKey?: string, 
+    openaiKey?: string, 
+    kimiKey?: string, 
+    groqKey?: string 
+}) => {
+    const cleanConfig: Record<string, string> = {};
+
+    // 1. Immediately store in localStorage & sessionStorage for instantaneous zero-latency access
     if (config.geminiKey !== undefined) {
         const cleanKey = config.geminiKey.trim();
+        cleanConfig.geminiKey = cleanKey;
         if (cleanKey) {
             localStorage.setItem('nexa_client_api_key', cleanKey);
         } else {
@@ -151,26 +163,59 @@ export const saveSystemConfig = async (config: { geminiKey?: string, ghToken?: s
     
     if (config.ghToken !== undefined) {
         const cleanToken = config.ghToken.trim();
-        if (cleanToken) sessionStorage.setItem('NEXA_GH_TOKEN', cleanToken);
-        else sessionStorage.removeItem('NEXA_GH_TOKEN');
+        cleanConfig.ghToken = cleanToken;
+        if (cleanToken) {
+            localStorage.setItem('NEXA_GH_TOKEN', cleanToken);
+            sessionStorage.setItem('NEXA_GH_TOKEN', cleanToken);
+        } else {
+            localStorage.removeItem('NEXA_GH_TOKEN');
+            sessionStorage.removeItem('NEXA_GH_TOKEN');
+        }
     }
+
     if (config.ghRepo !== undefined) {
-        const cleanRepo = config.ghRepo.trim();
-        if (cleanRepo) sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
-        else sessionStorage.removeItem('NEXA_GH_REPO');
+        let cleanRepo = config.ghRepo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '').replace(/\.git$/, '');
+        cleanConfig.ghRepo = cleanRepo;
+        if (cleanRepo) {
+            localStorage.setItem('NEXA_GH_REPO', cleanRepo);
+            sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
+        } else {
+            localStorage.removeItem('NEXA_GH_REPO');
+            sessionStorage.removeItem('NEXA_GH_REPO');
+        }
     }
+
+    if (config.adminPin !== undefined) {
+        const pin = config.adminPin.trim();
+        cleanConfig.adminPin = pin;
+        if (pin) localStorage.setItem('nexa_admin_pin', pin);
+        else localStorage.removeItem('nexa_admin_pin');
+    }
+
+    if (config.accessKey !== undefined) {
+        const accKey = config.accessKey.trim();
+        cleanConfig.accessKey = accKey;
+        if (accKey) localStorage.setItem('nexa_access_key', accKey);
+        else localStorage.removeItem('nexa_access_key');
+    }
+
+    if (config.openaiKey !== undefined) cleanConfig.openaiKey = config.openaiKey.trim();
+    if (config.kimiKey !== undefined) cleanConfig.kimiKey = config.kimiKey.trim();
+    if (config.groqKey !== undefined) cleanConfig.groqKey = config.groqKey.trim();
 
     // 2. Persist to Firestore DB with merge
     try {
         await setDoc(doc(db, "system", "config"), {
-            ...config,
+            ...cleanConfig,
             updatedAt: serverTimestamp(),
             lastUpdated: formatStdDate(new Date())
         }, { merge: true });
         
         syncFamilyTree();
-    } catch (e) {
-        console.warn("Notice: Failed to write system config to Firestore (using local persistence):", e);
+        return { success: true };
+    } catch (e: any) {
+        console.warn("Notice: Firestore write warning (local persistence active):", e);
+        return { success: true, warning: e?.message };
     }
 };
 
@@ -187,20 +232,41 @@ export const fetchSystemConfig = async () => {
             if (data.geminiKey && data.geminiKey.trim()) {
                 localStorage.setItem('nexa_client_api_key', data.geminiKey.trim());
             }
-            if (data.ghToken && data.ghToken.trim()) sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
-            if (data.ghRepo && data.ghRepo.trim()) sessionStorage.setItem('NEXA_GH_REPO', data.ghRepo.trim());
+            if (data.ghToken && data.ghToken.trim()) {
+                localStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
+                sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
+            }
+            if (data.ghRepo && data.ghRepo.trim()) {
+                const cleanRepo = data.ghRepo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '').replace(/\.git$/, '');
+                localStorage.setItem('NEXA_GH_REPO', cleanRepo);
+                sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
+            }
+            if (data.adminPin && data.adminPin.trim()) {
+                localStorage.setItem('nexa_admin_pin', data.adminPin.trim());
+            }
+            if (data.accessKey && data.accessKey.trim()) {
+                localStorage.setItem('nexa_access_key', data.accessKey.trim());
+            }
             
             return data;
         }
     } catch (e) {
-        // Fallback to locally stored key
+        console.warn("Could not fetch system config from Firestore, reading local fallback:", e);
     }
 
     const localKey = localStorage.getItem('nexa_client_api_key');
-    if (localKey) {
-        return { geminiKey: localKey };
-    }
-    return null;
+    const localGhToken = localStorage.getItem('NEXA_GH_TOKEN') || sessionStorage.getItem('NEXA_GH_TOKEN');
+    const localGhRepo = localStorage.getItem('NEXA_GH_REPO') || sessionStorage.getItem('NEXA_GH_REPO');
+    const localPin = localStorage.getItem('nexa_admin_pin');
+    const localAccess = localStorage.getItem('nexa_access_key');
+
+    return {
+        geminiKey: localKey || undefined,
+        ghToken: localGhToken || undefined,
+        ghRepo: localGhRepo || undefined,
+        adminPin: localPin || undefined,
+        accessKey: localAccess || undefined
+    };
 };
 
 // --- ACCESS KEY MANAGEMENT ---

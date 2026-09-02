@@ -306,7 +306,8 @@ export const speakAgentText = async (
     }
     if (mySessionId !== currentSessionId) return;
 
-    let pronunciationText = text.replace(/Chandan/gi, "चंदन").replace(/Lohave/gi, "लोहवे").replace(/NEXA/gi, "Nexa");
+    const safeText = typeof text === 'string' ? text : (typeof (text as any)?.text === 'string' ? (text as any).text : String(text || ""));
+    let pronunciationText = safeText.replace(/Chandan/gi, "चंदन").replace(/Lohave/gi, "लोहवे").replace(/NEXA/gi, "Nexa");
     const voiceData = VOICES[voiceKey] || VOICES['Aoede'];
 
     const voiceInstruction = voiceGender === 'Male' 

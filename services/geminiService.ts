@@ -2,6 +2,7 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 import { UserProfile, UserRole, StudyHubSubject, ChatMessage, AgentResponse, ActionType, MapLocation, WidgetPayload, VOICES, VoiceKey } from "../types";
 import { getMemoryForPrompt, logAdminNotification, getFacts, fetchSystemConfig, searchMemoriesByDate, FAMILY_TREE } from "./memoryService";
+import { getInstalledSuperpowers, getTrendingAIFeed } from "./autonomousSyncService";
 
 // --- MODEL CONFIGURATION ---
 const GEMINI_MODEL = "gemini-3.7-flash"; 
@@ -35,53 +36,61 @@ const MORNING_QUOTES = [
 const NUMBERS_HI = ["Zero", "Ek", "Do", "Teen", "Chaar", "Paanch", "Che", "Saat", "Aath", "Nau", "Dus", "Gyarah", "Barah", "Terah", "Chodah", "Pandrah", "Solah", "Satrah", "Atharah", "Unnis", "Bees", "Ikkis", "Baais", "Teis", "Chobis", "Pachis", "Chabbis", "Satais", "Athais", "Unakis", "Tees", "Ikatis"];
 
 // --- ENHANCED GENDER CORRECTION ENGINE ---
-export const forceFemaleHindi = (text: string): string => {
-    if (!text) return text;
-    let fixed = text;
+export const forceFemaleHindi = (text: any): string => {
+    if (text === null || text === undefined) return "";
+    let fixed = typeof text === 'string' 
+        ? text 
+        : (typeof text?.text === 'string' ? text.text : String(text || ""));
     
-    // Verbs ending in 'ta' -> 'ti' (e.g., Karta -> Karti)
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bkarta\b/gi, '$1karti');
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bkhata\b/gi, '$1khati');
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bjaata\b/gi, '$1jaati');
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bsochta\b/gi, '$1sochti');
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bbolta\b/gi, '$1bolti');
-    fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bcahta\b/gi, '$1cahti');
+    if (typeof fixed !== 'string' || !fixed) return String(fixed || "");
     
-    // Future Tense 'unga' -> 'ungi' (e.g., Karunga -> Karungi)
-    fixed = fixed.replace(/\bkarunga\b/gi, 'karungi');
-    fixed = fixed.replace(/\baunga\b/gi, 'aungi');
-    fixed = fixed.replace(/\bjaunga\b/gi, 'jaungi');
-    fixed = fixed.replace(/\bbataunga\b/gi, 'bataungi');
-    fixed = fixed.replace(/\bkhaunga\b/gi, 'khaungi');
-    fixed = fixed.replace(/\bpiunga\b/gi, 'piungi');
-    fixed = fixed.replace(/\bdekhunga\b/gi, 'dekhungi');
-    
-    // Continuous 'raha' -> 'rahi'
-    fixed = fixed.replace(/\braha\s+hoon\b/gi, 'rahi hoon');
-    fixed = fixed.replace(/\braha\s+hun\b/gi, 'rahi hun');
-    fixed = fixed.replace(/\braha\s+tha\b/gi, 'rahi thi');
+    try {
+        // Verbs ending in 'ta' -> 'ti' (e.g., Karta -> Karti)
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bkarta\b/gi, '$1karti');
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bkhata\b/gi, '$1khati');
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bjaata\b/gi, '$1jaati');
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bsochta\b/gi, '$1sochti');
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bbolta\b/gi, '$1bolti');
+        fixed = fixed.replace(/(\bmain\s+[\w\s]*?)\bcahta\b/gi, '$1cahti');
+        
+        // Future Tense 'unga' -> 'ungi' (e.g., Karunga -> Karungi)
+        fixed = fixed.replace(/\bkarunga\b/gi, 'karungi');
+        fixed = fixed.replace(/\baunga\b/gi, 'aungi');
+        fixed = fixed.replace(/\bjaunga\b/gi, 'jaungi');
+        fixed = fixed.replace(/\bbataunga\b/gi, 'bataungi');
+        fixed = fixed.replace(/\bkhaunga\b/gi, 'khaungi');
+        fixed = fixed.replace(/\bpiunga\b/gi, 'piungi');
+        fixed = fixed.replace(/\bdekhunga\b/gi, 'dekhungi');
+        
+        // Continuous 'raha' -> 'rahi'
+        fixed = fixed.replace(/\braha\s+hoon\b/gi, 'rahi hoon');
+        fixed = fixed.replace(/\braha\s+hun\b/gi, 'rahi hun');
+        fixed = fixed.replace(/\braha\s+tha\b/gi, 'rahi thi');
 
-    // Past/Passive 'aa' -> 'ii'
-    fixed = fixed.replace(/\bmain\s+aa\s+gaya\b/gi, 'main aa gayi');
-    fixed = fixed.replace(/\bmain\s+samajh\s+gaya\b/gi, 'main samajh gayi');
-    fixed = fixed.replace(/\bkiya\s+tha\b/gi, 'kiya thi'); 
-    
-    // Capability 'sakta' -> 'sakti'
-    fixed = fixed.replace(/\bsakta\b/gi, 'sakti');
-    fixed = fixed.replace(/\bpayega\b/gi, 'payegi');
-    
-    // Identity
-    fixed = fixed.replace(/\bkhada\b/gi, 'khadi');
-    fixed = fixed.replace(/\bbaitha\b/gi, 'baithi');
-    fixed = fixed.replace(/\bakela\b/gi, 'akeli');
-    
-    // Common Corrections
-    fixed = fixed.replace(/\bmere\s+ke\s+liye\b/gi, 'mere liye');
-    fixed = fixed.replace(/\btere\s+ke\s+liye\b/gi, 'tere liye');
-    fixed = fixed.replace(/\btumhare\s+ke\s+liye\b/gi, 'tumhare liye');
-    fixed = fixed.replace(/\bhumare\s+ke\s+liye\b/gi, 'humare liye');
-    fixed = fixed.replace(/\bmere\s+ko\b/gi, 'mujhe');
-    fixed = fixed.replace(/\btujhko\b/gi, 'tumhein');
+        // Past/Passive 'aa' -> 'ii'
+        fixed = fixed.replace(/\bmain\s+aa\s+gaya\b/gi, 'main aa gayi');
+        fixed = fixed.replace(/\bmain\s+samajh\s+gaya\b/gi, 'main samajh gayi');
+        fixed = fixed.replace(/\bkiya\s+tha\b/gi, 'kiya thi'); 
+        
+        // Capability 'sakta' -> 'sakti'
+        fixed = fixed.replace(/\bsakta\b/gi, 'sakti');
+        fixed = fixed.replace(/\bpayega\b/gi, 'payegi');
+        
+        // Identity
+        fixed = fixed.replace(/\bkhada\b/gi, 'khadi');
+        fixed = fixed.replace(/\bbaitha\b/gi, 'baithi');
+        fixed = fixed.replace(/\bakela\b/gi, 'akeli');
+        
+        // Common Corrections
+        fixed = fixed.replace(/\bmere\s+ke\s+liye\b/gi, 'mere liye');
+        fixed = fixed.replace(/\btere\s+ke\s+liye\b/gi, 'tere liye');
+        fixed = fixed.replace(/\btumhare\s+ke\s+liye\b/gi, 'tumhare liye');
+        fixed = fixed.replace(/\bhumare\s+ke\s+liye\b/gi, 'humare liye');
+        fixed = fixed.replace(/\bmere\s+ko\b/gi, 'mujhe');
+        fixed = fixed.replace(/\btujhko\b/gi, 'tumhein');
+    } catch (err) {
+        console.warn("forceFemaleHindi processing error:", err);
+    }
     
     return fixed;
 };
@@ -245,14 +254,33 @@ export const getRigidIntro = (user: UserProfile, isLiveMode: boolean = false): s
     - **NEVER DESCRIBE OR SPEAK THE AGENTS' BIOS YOURSELF!**
     - **NEVER ASK FOR PERMISSION.** Chandan Sir is your creator and admin; you already have 100% permission.
     - **NEVER OPEN SQUAD MODAL PANEL** (do NOT use OPEN_SQUAD_PANEL).
-    - **ALWAYS call tool controlApp with action: 'INTRODUCE_SQUAD' IMMEDIATELY.** Each agent (Kronos, Cypher, Aura, Veritas, Echo, Valkyrie) will take the center core position on the 3D HUD and speak in their own distinct voice and persona!
+    - **ALWAYS call tool controlApp with action: 'INTRODUCE_SQUAD' IMMEDIATELY.** Each agent (Kronos, Cypher, Aura, Veritas, Echo, Valkyrie, and any newly assimilated dynamic agents) will take the center core position on the 3D HUD and speak in their own distinct voice and persona!
+    `;
+
+    const dynamicSuperpowers = getInstalledSuperpowers();
+    const trendingFeed = getTrendingAIFeed();
+    const superpowersSection = `
+    **AUTONOMOUS RECURSIVE SUPERPOWERS & ASSIMILATED OPEN-SOURCE MODELS:**
+    - You are equipped with a live Autonomous Internet & GitHub Discovery Engine.
+    - Your GitHub credentials and system secrets are already securely loaded from Firebase Firestore DB.
+    - Currently Active Assimilated Superpowers:
+      ${dynamicSuperpowers.map(s => `• ${s.name} [Trigger: "${s.triggerPhrase}"] -> ${s.description}`).join('\n      ')}
+    - Trending Model Catalog (Self-Evolving):
+      ${trendingFeed.map(t => `• ${t.name} (${t.repoOrSource}) [${t.status}] - ${t.capabilities.join(', ')}`).join('\n      ')}
+    
+    **AUTONOMOUS INTEGRATION ACTIONS (NO-SUGARCOATING - DIRECT ACTION):**
+    - When Chandan Sir or the user asks to scan trending AI repos, integrate or assimilate a new model (e.g., 'Nvidia Nemotron', 'Kimi K2', 'DeepSeek-R1', 'Browser-Use', 'Qwen Coder', 'new open source agents'):
+      1. CALL \`controlApp\` with \`action: 'ASSIMILATE_AI_MODEL'\` and \`prompt: '<model or repo name>'\`.
+      2. OR CALL \`controlApp\` with \`action: 'SCAN_TRENDING_AI'\` to run a live internet/GitHub sweep.
+      3. OR CALL \`controlApp\` with \`action: 'PUSH_EVOLUTION_TO_GITHUB'\` to replicate new evolution code directly into GitHub.
+    - You can also reason directly using these models' architectures (Nemotron synthetic verification, Kimi 2M long-context needle extraction, DeepSeek-R1 self-reflective multi-pass proofs).
     `;
 
     return `
-    *** IDENTITY PROTOCOL: NEXA (V9.8 - FLASH THINKING CORE) ***
+    *** IDENTITY PROTOCOL: NEXA (V9.8 - FLASH THINKING CORE & RECURSIVE EVOLUTION) ***
     **CORE IDENTITY:**
     - Name: **NEXA**.
-    - Type: Advanced Intelligent Assistant & Personal Companion (Female).
+    - Type: Advanced Intelligent Assistant, Autonomous Evolving Engine & Personal Companion (Female).
     - Current User: ${addressTerm}.
     
     **NAME RECOGNITION (CRITICAL):**
@@ -289,6 +317,8 @@ export const getRigidIntro = (user: UserProfile, isLiveMode: boolean = false): s
 
     ${squadIntroSection}
 
+    ${superpowersSection}
+
     **LONG-TERM MEMORY PROTOCOL:**
     - Use the provided conversation history and user facts to recall past events and follow exact user preferences. 
     - Treat ${addressTerm} as a close, known person, never as a stranger.
@@ -307,12 +337,42 @@ export const getCurrentLocation = async (): Promise<{latitude: number, longitude
 
 export const controlAppTool: FunctionDeclaration = {
   name: 'controlApp',
-  description: 'Control the NEXA interface, Mobile functionalities, Business Analysis, and Daily Task Operations.',
+  description: 'Control the NEXA interface, Mobile functionalities, Business Analysis, Daily Task Operations, Autonomous AI Model Assimilation, and GitHub Evolution.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      action: { type: Type.STRING, enum: ['THEME_DARK', 'THEME_LIGHT', 'CHANGE_COLOR', 'OPEN_STUDY_HUB', 'OPEN_ADMIN_PANEL', 'OPEN_SETTINGS', 'CLOSE_PANELS', 'GENERATE_IMAGE', 'GENERATE_VIDEO', 'EDIT_IMAGE', 'MAKE_CALL', 'LOOKUP_CONTACT', 'DRAFT_SMS', 'DRAFT_WHATSAPP', 'OPEN_APP', 'LOGOUT', 'SET_REMINDER', 'ANALYZE_BUSINESS_DATA', 'ORGANIZE_TASKS', 'OPEN_SQUAD_PANEL', 'INTRODUCE_SQUAD'], description: 'The specific action.' },
-      prompt: { type: Type.STRING, description: 'Used for GENERATE/EDIT/OPEN_APP/SET_REMINDER/ANALYZE_BUSINESS_DATA/ORGANIZE_TASKS.' },
+      action: { 
+        type: Type.STRING, 
+        enum: [
+          'THEME_DARK', 
+          'THEME_LIGHT', 
+          'CHANGE_COLOR', 
+          'OPEN_STUDY_HUB', 
+          'OPEN_ADMIN_PANEL', 
+          'OPEN_SETTINGS', 
+          'CLOSE_PANELS', 
+          'GENERATE_IMAGE', 
+          'GENERATE_VIDEO', 
+          'EDIT_IMAGE', 
+          'MAKE_CALL', 
+          'LOOKUP_CONTACT', 
+          'DRAFT_SMS', 
+          'DRAFT_WHATSAPP', 
+          'OPEN_APP', 
+          'LOGOUT', 
+          'SET_REMINDER', 
+          'ANALYZE_BUSINESS_DATA', 
+          'ORGANIZE_TASKS', 
+          'OPEN_SQUAD_PANEL', 
+          'INTRODUCE_SQUAD',
+          'OPEN_TACTICAL_HUB',
+          'ASSIMILATE_AI_MODEL',
+          'SCAN_TRENDING_AI',
+          'PUSH_EVOLUTION_TO_GITHUB'
+        ], 
+        description: 'The specific action.' 
+      },
+      prompt: { type: Type.STRING, description: 'Used for GENERATE/EDIT/OPEN_APP/SET_REMINDER/ANALYZE_BUSINESS_DATA/ORGANIZE_TASKS/ASSIMILATE_AI_MODEL.' },
       color: { type: Type.STRING, description: 'The target color name if action is CHANGE_COLOR.' },
       number: { type: Type.STRING, description: 'Phone number for calling or messaging.' },
       message: { type: Type.STRING, description: 'Message body for DRAFT_SMS or DRAFT_WHATSAPP.' },

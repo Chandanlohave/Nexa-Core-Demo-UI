@@ -13,6 +13,7 @@ import { PipelineModal } from './components/PipelineModal';
 import { AgentDebateModal } from './components/AgentDebateModal';
 import { CustomAgentModal } from './components/CustomAgentModal';
 import { MemoryVaultModal } from './components/MemoryVaultModal';
+import { TacticalEvolutionHub } from './components/TacticalEvolutionHub';
 import { startSquadIntroSequence } from './services/squadService';
 import { GestureController, GestureData } from './components/GestureController';
 import { logoutFirebase } from './services/firebaseConfig';
@@ -39,10 +40,18 @@ const BoltIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs><radialGradient id="coreGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" stopColor="currentColor" /><stop offset="100%" stopColor="#0077ff" /></radialGradient></defs>
-      <g style={{ transformOrigin: 'center', animation: `spin ${rotationDuration} linear infinite` }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeDasharray="5.85 2" transform="rotate(-11.25 12 12)" /></g>
-      <circle cx="12" cy="12" r="8" stroke="rgba(0,0,0,0.7)" strokeWidth="0.5" />
-      <circle cx="12" cy="12" r="7.75" fill="url(#coreGradient)" />
+      <defs>
+        <radialGradient id="coreGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="60%" stopColor="#0ea5e9" />
+          <stop offset="100%" stopColor="#0284c7" />
+        </radialGradient>
+      </defs>
+      <g style={{ transformOrigin: 'center', animation: `spin ${rotationDuration} linear infinite` }}>
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3.5" strokeDasharray="5.85 2" transform="rotate(-11.25 12 12)" />
+      </g>
+      <circle cx="12" cy="12" r="7.5" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5" />
+      <circle cx="12" cy="12" r="7" fill="url(#coreGradient)" />
     </svg>
 );
 
@@ -91,7 +100,7 @@ const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyH
     </div>
 );
 
-const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputMode, onInputModeChange, textInput, onTextInputChange, onTextSubmit, textInputPlaceholder, onFileUpload, isLive, isCameraActive, onToggleCamera, showChat, pendingFile, onToggleTorch, isTorchOn }: any) => {
+const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputMode, onInputModeChange, textInput, onTextInputChange, onTextSubmit, textInputPlaceholder, onFileUpload, isLive, isCameraActive, onToggleCamera, showChat, pendingFile, onToggleTorch, isTorchOn, onTagAgent }: any) => {
     const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB, isLiveMode = hudState === HUDState.LIVE, isWatching = hudState === HUDState.WATCHING, isGenerating = hudState === HUDState.GENERATING, isRepairing = hudState === HUDState.REPAIRING, isCoding = hudState === HUDState.CODING, isGlitch = hudState === HUDState.GLITCH;
     let baseDuration = isThinking ? 2 : (isSpeaking || isListening || isLiveMode) ? 4 : isWarning ? 1 : isStudyHub ? 6 : 8;
     // Safety check for multiplier
@@ -114,95 +123,147 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
     const isTextInputActive = inputMode === 'text';
     
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const sideButtonStyle = `absolute top-1/2 -translate-y-1/2 w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-full transition-all duration-300 transform-gpu z-30`;
-    const inactiveBtnStyle = `text-zinc-400 dark:text-zinc-600 hover:text-nexa-cyan hover:bg-nexa-cyan/10`;
-    const activeBtnStyle = `bg-nexa-cyan/20 text-nexa-cyan`;
+    const sideButtonStyle = `w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 flex items-center justify-center rounded-full transition-all duration-300 transform-gpu z-30 cursor-pointer`;
+    const inactiveBtnStyle = `text-zinc-400 dark:text-zinc-500 hover:text-nexa-cyan hover:bg-nexa-cyan/10 border border-zinc-300 dark:border-zinc-800`;
+    const activeBtnStyle = `bg-nexa-cyan/20 text-nexa-cyan border border-nexa-cyan/50 shadow-[0_0_15px_rgba(41,223,255,0.3)]`;
+
+    const quickAgents = [
+        { name: 'Nexa', color: '#00e5ff' },
+        { name: 'Kronos', color: '#3b82f6' },
+        { name: 'Cypher', color: '#f97316' },
+        { name: 'Aura', color: '#a855f7' },
+        { name: 'Veritas', color: '#10b981' },
+        { name: 'Echo', color: '#38bdf8' },
+        { name: 'Valkyrie', color: '#ef4444' },
+    ];
 
     return (
-        <div className="w-full shrink-0 bg-gradient-to-t from-zinc-100 via-zinc-100/80 to-transparent dark:from-black dark:via-black/80 dark:to-transparent z-40 relative flex flex-col items-center justify-center pb-[env(safe-area-inset-bottom)] transition-all duration-300">
-            <div className="absolute w-full top-1/2 -translate-y-1/2 h-[1px] px-4"><div className="w-full h-full flex justify-between items-center"><div className="flex-1 h-full bg-gradient-to-r from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div><div className="w-24 flex-shrink-0"></div><div className="flex-1 h-full bg-gradient-to-l from-transparent via-zinc-300/50 to-zinc-400/70 dark:via-nexa-cyan/20 dark:to-nexa-cyan/40"></div></div></div>
+        <div className="w-full shrink-0 bg-gradient-to-t from-slate-100/90 via-slate-100/60 to-transparent dark:from-black dark:via-black/90 dark:to-transparent z-40 relative flex flex-col items-center justify-center pb-[env(safe-area-inset-bottom)] transition-all duration-300 pt-2">
             
-            <div className="w-full max-w-3xl mx-auto h-24 relative px-4 flex items-center justify-center">
-                
-                {isLive ? (
-                    <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-row items-center gap-4 z-50">
-                        <button 
-                            onClick={onToggleCamera} 
-                            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${isCameraActive ? activeBtnStyle : inactiveBtnStyle}`}
-                            title="Toggle Vision"
-                        >
-                            {isCameraActive ? <EyeIcon /> : <EyeOffIcon />}
-                        </button>
-
-                        {isCameraActive && (
-                            <button 
-                                onClick={onToggleTorch} 
-                                className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 border border-nexa-cyan/30 ${isTorchOn ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_15px_#fbbf24]' : 'bg-black/50 text-zinc-500 hover:text-yellow-200'}`}
-                                title="Toggle Flashlight"
-                            >
-                                <BoltIcon />
-                            </button>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        <input 
-                            type="file" 
-                            accept="image/*,text/*,.js,.ts,.py,.html,.css,.json,.md,.pdf,.doc,.docx" 
-                            className="hidden" 
-                            ref={fileInputRef} 
-                            onChange={(e) => {
-                                if(e.target.files && e.target.files[0]) {
-                                    onFileUpload(e.target.files[0]);
-                                    e.target.value = ''; 
-                                }
+            {/* Quick Agent Tag Chips when in typing mode */}
+            {isTextInputActive && (
+                <div className="w-full max-w-xl px-4 mb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 animate-fade-in">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider shrink-0 mr-1">Tag:</span>
+                    {quickAgents.map((ag) => (
+                        <button
+                            key={ag.name}
+                            type="button"
+                            onClick={() => onTagAgent ? onTagAgent(ag.name) : null}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold shrink-0 transition-all hover:scale-105 border cursor-pointer"
+                            style={{ 
+                                backgroundColor: `${ag.color}15`, 
+                                borderColor: `${ag.color}50`, 
+                                color: ag.color 
                             }}
-                        />
-                        <button 
-                            onClick={() => fileInputRef.current?.click()} 
-                            className={`${sideButtonStyle} left-4 ${pendingFile ? activeBtnStyle : inactiveBtnStyle}`}
                         >
-                            <CameraIcon />
+                            @{ag.name}
                         </button>
-                    </>
-                )}
+                    ))}
+                </div>
+            )}
 
+            <div className="w-full max-w-3xl mx-auto h-20 sm:h-24 relative px-4 flex items-center justify-between gap-3">
+                
+                {/* Left Side: Camera / File Upload */}
+                <div className="flex items-center gap-2">
+                    {isLive ? (
+                        <div className="flex flex-row items-center gap-2 z-50">
+                            <button 
+                                onClick={onToggleCamera} 
+                                className={`${sideButtonStyle} ${isCameraActive ? activeBtnStyle : inactiveBtnStyle}`}
+                                title="Toggle Vision"
+                            >
+                                {isCameraActive ? <EyeIcon /> : <EyeOffIcon />}
+                            </button>
+
+                            {isCameraActive && (
+                                <button 
+                                    onClick={onToggleTorch} 
+                                    className={`${sideButtonStyle} ${isTorchOn ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_15px_#fbbf24] border-yellow-500/50' : 'bg-black/50 text-zinc-500 hover:text-yellow-200'}`}
+                                    title="Toggle Flashlight"
+                                >
+                                    <BoltIcon />
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            <input 
+                                type="file" 
+                                accept="image/*,text/*,.js,.ts,.py,.html,.css,.json,.md,.pdf,.doc,.docx" 
+                                className="hidden" 
+                                ref={fileInputRef} 
+                                onChange={(e) => {
+                                    if(e.target.files && e.target.files[0]) {
+                                        onFileUpload(e.target.files[0]);
+                                        e.target.value = ''; 
+                                    }
+                                }}
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()} 
+                                className={`${sideButtonStyle} ${pendingFile ? activeBtnStyle : inactiveBtnStyle}`}
+                                title="Upload File / Image"
+                            >
+                                <CameraIcon />
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                {/* Center Control: Typing Input Bar OR Voice Reactor Core */}
                 {isTextInputActive ? (
-                    <div className="w-full h-full flex items-center justify-center animate-fade-in pl-16 pr-16">
-                         <form onSubmit={onTextSubmit} className="w-full flex items-center gap-2">
+                    <div className="flex-1 max-w-xl h-full flex items-center justify-center animate-fade-in">
+                         <form onSubmit={onTextSubmit} className="w-full flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 border border-nexa-cyan/40 rounded-full px-4 py-1.5 backdrop-blur-md shadow-[0_0_15px_rgba(41,223,255,0.15)]">
                             <input 
                                 type="text"
                                 value={textInput}
                                 onChange={onTextInputChange}
                                 placeholder={textInputPlaceholder}
                                 autoFocus
-                                className={`w-full bg-transparent border-0 border-b  text-zinc-800 dark:text-white font-mono text-sm focus:ring-0 transition-colors ${isWarning ? 'border-red-500 focus:border-red-400 placeholder-red-500/50' : 'border-nexa-cyan/30 focus:border-nexa-cyan'}`}
+                                className="w-full bg-transparent border-0 text-zinc-800 dark:text-white font-mono text-xs sm:text-sm focus:ring-0 placeholder-zinc-400 dark:placeholder-zinc-500 outline-none"
                             />
-                            <button type="submit" className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full text-black transition-colors disabled:opacity-50 ${isWarning ? 'bg-red-500 hover:bg-red-400' : 'bg-nexa-cyan hover:bg-white'}`} disabled={!textInput.trim() && !pendingFile}>
+                            <button 
+                                type="submit" 
+                                className={`w-8 h-8 sm:w-9 sm:h-9 flex-shrink-0 flex items-center justify-center rounded-full text-black transition-colors disabled:opacity-30 cursor-pointer ${isWarning ? 'bg-red-500 hover:bg-red-400' : 'bg-nexa-cyan hover:bg-white'}`} 
+                                disabled={!textInput.trim() && !pendingFile}
+                                title="Send Message"
+                            >
                                 <SendIcon />
                             </button>
                         </form>
                     </div>
                 ) : (
-                    <div className="relative z-20 flex items-center justify-center">
-                        <button onClick={onMicClick} className={`relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''}`} disabled={isWarning || isRepairing || hudState === HUDState.SAFEMODE || isGlitch}>
-                            <div className="absolute inset-0 rounded-full bg-white dark:bg-black shadow-inner"></div>
-                            <div className={`relative z-10 transition-colors duration-300 ${iconColorClass} ${pulseClass} shadow-[0_0_20px_currentColor] group-hover:shadow-[0_0_30px_currentColor]`}>
-                                <div className="scale-[1.3]"><MicIcon rotationDuration={finalDuration} /></div>
+                    <div className="relative z-20 flex flex-col items-center justify-center">
+                        <button 
+                            onClick={onMicClick} 
+                            className={`relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''} cursor-pointer`} 
+                            disabled={isWarning || isRepairing || hudState === HUDState.SAFEMODE || isGlitch}
+                            title="Click for Voice Mode"
+                        >
+                            <div className="absolute inset-0 rounded-full bg-white/90 dark:bg-zinc-950/90 shadow-[0_4px_20px_rgba(0,0,0,0.06)] dark:shadow-inner border border-zinc-200/90 dark:border-zinc-800 backdrop-blur-sm"></div>
+                            <div className={`relative z-10 rounded-full flex items-center justify-center transition-colors duration-300 ${iconColorClass} ${pulseClass} filter drop-shadow-[0_0_10px_rgba(41,223,255,0.7)] group-hover:drop-shadow-[0_0_18px_rgba(41,223,255,0.9)]`}>
+                                <div className="scale-[1.1] sm:scale-[1.3] flex items-center justify-center rounded-full"><MicIcon rotationDuration={finalDuration} /></div>
                             </div>
                         </button>
                     </div>
                 )}
                 
-                <button 
-                    onClick={onInputModeChange} 
-                    className={`${sideButtonStyle} right-4 ${showChat ? activeBtnStyle : inactiveBtnStyle}`}
-                    aria-label="Toggle text input and chat"
-                >
-                    <div className={showChat ? 'rotate-90 transition-transform' : 'rotate-0 transition-transform'}>
-                         <KeyboardIcon />
-                    </div>
-                </button>
+                {/* Right Side: TYPE / VOICE MODE TOGGLE BUTTON */}
+                <div className="flex items-center gap-1.5">
+                    <button 
+                        onClick={onInputModeChange} 
+                        className={`${sideButtonStyle} ${isTextInputActive || showChat ? activeBtnStyle : inactiveBtnStyle} flex items-center justify-center relative group`}
+                        aria-label="Toggle text typing mode and chat"
+                        title={isTextInputActive ? "Switch to Voice Mode" : "Switch to Text Typing Mode"}
+                    >
+                        <KeyboardIcon />
+                        {/* Tooltip / Badge */}
+                        <span className="absolute -top-7 right-0 text-[8px] font-mono font-bold bg-cyan-500 text-black px-1.5 py-0.5 rounded shadow whitespace-nowrap opacity-90 group-hover:opacity-100 transition-opacity">
+                            {isTextInputActive ? 'VOICE' : 'TYPE ⌨️'}
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -246,6 +307,7 @@ const App: React.FC = () => {
     const [showDebate, setShowDebate] = useState(false);
     const [showCustomAgent, setShowCustomAgent] = useState(false);
     const [showMemoryVault, setShowMemoryVault] = useState(false);
+    const [showTacticalHub, setShowTacticalHub] = useState(false);
 
     const [customAgents, setCustomAgents] = useState<any[]>(() => {
         try {
@@ -293,6 +355,7 @@ const App: React.FC = () => {
         setConfig: (c: any) => {},
         setShowAdmin: (show: boolean) => {},
         setShowSquad: (show: boolean) => {},
+        setShowTacticalHub: (show: boolean) => {},
         setShowChat: (show: boolean) => {},
         setHudState: (state: HUDState) => {},
         setActiveHighlightAgentId: (id: string | null) => {},
@@ -314,6 +377,7 @@ const App: React.FC = () => {
                     case 'LOGOUT': callbacksRef.current.handleLogout(); break;
                     case 'THEME_DARK': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'dark'})); break;
                     case 'THEME_LIGHT': callbacksRef.current.setConfig((c: any) => ({...c, theme: 'light'})); break;
+                    case 'OPEN_TACTICAL_HUB': callbacksRef.current.setShowTacticalHub(true); break;
                     case 'HIGHLIGHT_AGENT':
                         callbacksRef.current.setActiveHighlightAgentId(params?.agentId || null);
                         break;
@@ -662,6 +726,7 @@ const App: React.FC = () => {
         callbacksRef.current.setConfig = setConfig;
         callbacksRef.current.setShowAdmin = setShowAdmin;
         callbacksRef.current.setShowSquad = setShowSquad;
+        callbacksRef.current.setShowTacticalHub = setShowTacticalHub;
         callbacksRef.current.setShowChat = setShowChat;
         callbacksRef.current.setHudState = setHudState;
         callbacksRef.current.setActiveHighlightAgentId = setActiveHighlightAgentId;
@@ -671,7 +736,7 @@ const App: React.FC = () => {
         callbacksRef.current.customAgents = customAgents;
         callbacksRef.current.liveSession = liveSession;
         callbacksRef.current.userRole = user?.role || UserRole.USER;
-    });
+    }, [user, customAgents, liveSession, config]);
 
     return (
         <div className="w-screen h-[100dvh] flex flex-col overflow-hidden bg-zinc-100 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300 fixed inset-0">
@@ -834,6 +899,11 @@ const App: React.FC = () => {
                         <AgentVirtualOffice 
                             activeAgentId={activeHighlightAgentId} 
                             hudState={hudState} 
+                            user={user}
+                            onDirectChat={(agentName: string) => {
+                                setShowChat(true);
+                                setTextInput(`@${agentName} `);
+                            }}
                         />
                     </div>
 
@@ -865,9 +935,24 @@ const App: React.FC = () => {
                         onToggleTorch={handleToggleTorch}
                         isTorchOn={isTorchOn}
                         rotationSpeedMultiplier={config.micRotationSpeed || 1}
+                        onTagAgent={(agentName: string) => {
+                            setTextInput(`@${agentName} `);
+                            setShowChat(true);
+                            setInputMode('text');
+                        }}
                     />
                     
-                    <AdminPanel isOpen={showAdmin} onClose={() => setShowAdmin(false)} config={config} onConfigChange={setConfig} onClearMemory={() => clearAllMemory(user)} onManageAccounts={() => setShowAccounts(true)} onViewStudyHub={() => setShowStudyHub(true)} onVoiceChange={handleVoiceChange} />
+                    <AdminPanel 
+                        isOpen={showAdmin} 
+                        onClose={() => setShowAdmin(false)} 
+                        config={config} 
+                        onConfigChange={setConfig} 
+                        onClearMemory={() => clearAllMemory(user)} 
+                        onManageAccounts={() => setShowAccounts(true)} 
+                        onViewStudyHub={() => setShowStudyHub(true)} 
+                        onVoiceChange={handleVoiceChange} 
+                        onOpenTacticalHub={() => setShowTacticalHub(true)}
+                    />
                     <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} />
                     <StudyHubPanel isOpen={showStudyHub} onClose={() => setShowStudyHub(false)} user={user} onStartLesson={(subject, topic) => {
                          processUserInput(`Teach me ${topic || 'summary'} from ${subject.courseName}`, null);
@@ -926,6 +1011,12 @@ const App: React.FC = () => {
                             onClose={() => setShowMemoryVault(false)}
                         />
                     )}
+
+                    <TacticalEvolutionHub
+                        isOpen={showTacticalHub}
+                        onClose={() => setShowTacticalHub(false)}
+                        user={user}
+                    />
                 </>
             )}
         </div>

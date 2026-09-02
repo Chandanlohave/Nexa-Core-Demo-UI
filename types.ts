@@ -177,6 +177,13 @@ export type ActionType =
   | 'SET_REMINDER' // NEW: Reminder Action
   | 'ANALYZE_BUSINESS_DATA' // Track 2: Business Decision Intelligence
   | 'ORGANIZE_TASKS' // Track 3: Operational AI Agent Automation
+  | 'OPEN_TACTICAL_HUB' // Ultron Matrix & Autonomous Evolution Hub
+  | 'ASSIMILATE_AI_MODEL' // Dynamic model/agent assimilation
+  | 'SCAN_TRENDING_AI' // Internet/GitHub trending AI discovery
+  | 'PUSH_EVOLUTION_TO_GITHUB' // Commit evolution manifest to GitHub
+  | 'OPEN_SQUAD_PANEL'
+  | 'INTRODUCE_SQUAD'
+  | 'HIGHLIGHT_AGENT'
   | 'NONE';
 
 export interface AgentResponse {

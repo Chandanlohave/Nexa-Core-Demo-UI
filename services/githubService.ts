@@ -2,6 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { fetchSystemConfig } from './memoryService';
 import { UserRole } from "../types";
+import { runMultiAgentCodeAudit } from "./agentAuditEngine";
 
 const GITHUB_API_BASE = "https://api.github.com";
 
@@ -18,11 +19,15 @@ function base64ToUtf8(str: string): string {
     return decodeURIComponent(escape(window.atob(str)));
 }
 
-const getAuthHeaders = (token: string) => ({
-    "Authorization": `token ${token}`,
-    "Accept": "application/vnd.github.v3+json",
-    "Content-Type": "application/json"
-});
+export const getAuthHeaders = (token: string) => {
+    const clean = token.trim();
+    const authScheme = clean.startsWith('github_pat_') || clean.startsWith('ghp_') ? `Bearer ${clean}` : `token ${clean}`;
+    return {
+        "Authorization": authScheme,
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+    };
+};
 
 // --- HELPER TO CHECK IF USER IS VIP (Duplicate logic for safety without circular imports) ---
 const isVipUser = (user: any) => {
@@ -259,6 +264,19 @@ export const generateCodePatch = async (currentCode: string, userRequest: string
             throw new Error("AI generated identical code. No changes were made.");
         }
 
+        // Multi-Agent Security & Architecture Audit (Cypher + Kronos + Veritas)
+        console.log(`[MULTI-AGENT AUDIT] Running security & integrity check on ${filePath}...`);
+        const auditReport = await runMultiAgentCodeAudit(newCode, filePath, 'CODE_PATCH');
+        console.log(`[MULTI-AGENT AUDIT RESULT] Score: ${auditReport.securityScore}/100, Passed: ${auditReport.passed}`, auditReport.summary);
+
+        if (!auditReport.passed || auditReport.securityScore < 70) {
+            console.warn("[MULTI-AGENT AUDIT WARNING] Code flagged by security agents:", auditReport);
+            // If secrets detected by Cypher, abort immediately
+            if (auditReport.cypherVerdict.secretsDetected) {
+                throw new Error(`Security Audit Blocked: Exposed credentials detected by Cypher: ${auditReport.cypherVerdict.findings}`);
+            }
+        }
+
         return newCode;
 
     } catch (e: any) {
@@ -275,10 +293,16 @@ export const pushToGithub = async (path: string, newContent: string, sha: string
     const { token, repo } = await getRobustGithubConfig();
     if (!token || !repo) throw new Error("GITHUB_CONFIG_MISSING");
 
+    // Multi-Agent Pre-Flight Verification before committing to repository
+    const auditReport = await runMultiAgentCodeAudit(newContent, path, 'CODE_PATCH');
+    if (auditReport.cypherVerdict.secretsDetected) {
+        throw new Error(`Commit aborted by Cypher: Sensitive token or secret key detected in code payload.`);
+    }
+
     const encodedContent = utf8ToBase64(newContent);
 
     const payload: any = {
-        message: `NEXA SELF-UPDATE: ${message}`,
+        message: `NEXA SELF-UPDATE [Audit Score: ${auditReport.securityScore}%]: ${message}`,
         content: encodedContent
     };
     

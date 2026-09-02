@@ -2,6 +2,14 @@ import { UserProfile, AppConfig, HUDState, ChatMessage, ActionType } from '../ty
 import { generateTextResponse } from '../services/geminiService';
 import { appendMessageToMemory } from '../services/memoryService';
 import { identifyTargetFile, fetchFileContent, generateCodePatch, pushToGithub } from '../services/githubService';
+import { recordInteractionEvolution } from '../services/evolutionService';
+import { 
+  scanInternetForTrendingAI, 
+  synthesizeSkillSuperpower, 
+  getTrendingAIFeed, 
+  commitAutonomousEvolutionToGithub,
+  TrendingAITarget
+} from '../services/autonomousSyncService';
 
 export interface NexaCoreCallbacks {
     onStateChange: (state: HUDState) => void;
@@ -87,8 +95,11 @@ export class NexaCoreController {
         this.callbacks.onMessageAdded(userMsg);
         appendMessageToMemory(this.user, userMsg);
         
+        const startTime = Date.now();
         try {
             const response = await generateTextResponse(text, this.user, this.config.naughtyModeOverride, file || undefined);
+            const latency = Date.now() - startTime;
+            recordInteractionEvolution(true, latency);
             if (response.action && response.action !== 'NONE') {
                 this.executeAction(response.action as ActionType, response.actionParams);
             }
@@ -106,6 +117,7 @@ export class NexaCoreController {
             }
         } catch (e) {
             console.error(e);
+            recordInteractionEvolution(false, Date.now() - startTime);
             this.callbacks.onStateChange(HUDState.IDLE);
             setTimeout(() => this.callbacks.onStateChange(HUDState.IDLE), 2000);
         }
@@ -140,6 +152,74 @@ export class NexaCoreController {
                     }
                 }, 100);
                 break;
+
+            case 'ASSIMILATE_AI_MODEL':
+                this.callbacks.onStateChange(HUDState.THINKING);
+                setTimeout(async () => {
+                    try {
+                        await this.callbacks.onSpeak("Trending AI model and repo assimilation initiated.");
+                        const feed = getTrendingAIFeed();
+                        const query = (params?.prompt || params?.name || "").toLowerCase();
+                        let target = feed.find(f => f.name.toLowerCase().includes(query) || f.repoOrSource.toLowerCase().includes(query));
+                        
+                        if (!target && feed.length > 0) {
+                            target = feed[0];
+                        }
+                        
+                        if (target) {
+                            await this.callbacks.onSpeak(`Assimilating architecture from ${target.name}. Synthesizing MCP superpowers and sub-agent persona.`);
+                            const result = await synthesizeSkillSuperpower(target);
+                            await this.callbacks.onSpeak(`${result.summary} Dynamic sub-agent ${result.agentNode.name} is now online in your squad.`);
+                        } else {
+                            await this.callbacks.onSpeak("No matching target found. Running live scan on internet.");
+                            const scan = await scanInternetForTrendingAI();
+                            if (scan.newTargetsFound.length > 0) {
+                                const newTarget = scan.newTargetsFound[0];
+                                const res = await synthesizeSkillSuperpower(newTarget);
+                                await this.callbacks.onSpeak(`Discovered and assimilated ${newTarget.name}. ${res.summary}`);
+                            } else {
+                                await this.callbacks.onSpeak("Scanned live sources. All current trending models are already assimilated.");
+                            }
+                        }
+                    } catch (e: any) {
+                        console.error("Assimilation failed:", e);
+                        await this.callbacks.onSpeak(`Assimilation encounter: ${e.message}`);
+                    } finally {
+                        this.callbacks.onStateChange(HUDState.IDLE);
+                    }
+                }, 100);
+                break;
+
+            case 'SCAN_TRENDING_AI':
+                this.callbacks.onStateChange(HUDState.THINKING);
+                setTimeout(async () => {
+                    try {
+                        await this.callbacks.onSpeak("Scanning GitHub and global intelligence sources for trending AI models and MCP servers.");
+                        const scan = await scanInternetForTrendingAI();
+                        await this.callbacks.onSpeak(scan.summary);
+                    } catch (e: any) {
+                        await this.callbacks.onSpeak("Scan complete with local cache registry.");
+                    } finally {
+                        this.callbacks.onStateChange(HUDState.IDLE);
+                    }
+                }, 100);
+                break;
+
+            case 'PUSH_EVOLUTION_TO_GITHUB':
+                this.callbacks.onStateChange(HUDState.CODING);
+                setTimeout(async () => {
+                    try {
+                        await this.callbacks.onSpeak("Pushing autonomous evolution manifest to your GitHub repository using Firebase credentials.");
+                        const res = await commitAutonomousEvolutionToGithub();
+                        await this.callbacks.onSpeak(res.message);
+                    } catch (e: any) {
+                        await this.callbacks.onSpeak(`GitHub push notice: ${e.message}`);
+                    } finally {
+                        this.callbacks.onStateChange(HUDState.IDLE);
+                    }
+                }, 100);
+                break;
+
             default:
                 this.callbacks.onAction(action, params);
                 break;
