@@ -46,22 +46,29 @@ const INSULT_KEYWORDS = [
 ];
 
 // --- AUDIO HELPERS ---
-function encodeBase64(bytes: Uint8Array) {
+function encodeBase64(bytes: Uint8Array): string {
+  if (!bytes || !bytes.byteLength) return '';
   let binary = '';
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) { binary += String.fromCharCode(bytes[i]); }
   return btoa(binary);
 }
 
-function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) { bytes[i] = binaryString.charCodeAt(i); }
-  return bytes;
+function decodeBase64(base64: string): Uint8Array {
+  if (!base64 || typeof base64 !== 'string') return new Uint8Array(0);
+  try {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) { bytes[i] = binaryString.charCodeAt(i); }
+    return bytes;
+  } catch (e) {
+    return new Uint8Array(0);
+  }
 }
 
 function downsampleTo16k(input: Float32Array, inputRate: number): Int16Array {
+    if (!input || input.length === 0) return new Int16Array(0);
     if (inputRate === 16000) {
         const output = new Int16Array(input.length);
         for (let i = 0; i < input.length; i++) {
@@ -87,17 +94,26 @@ function downsampleTo16k(input: Float32Array, inputRate: number): Int16Array {
     return result;
 }
 
-async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
+async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (!ctx) return null;
   const sampleRate = 24000;
   const numChannels = 1;
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) { channelData[i] = dataInt16[i * numChannels + channel] / 32768.0; }
+  if (!data || !data.buffer || data.byteLength === 0) {
+    return ctx.createBuffer(numChannels, 1, sampleRate);
   }
-  return buffer;
+  try {
+    const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
+    const frameCount = Math.max(1, Math.floor(dataInt16.length / numChannels));
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < frameCount; i++) { channelData[i] = dataInt16[i * numChannels + channel] / 32768.0; }
+    }
+    return buffer;
+  } catch (err) {
+    console.warn("Live PCM decode error:", err);
+    return ctx.createBuffer(numChannels, 1, sampleRate);
+  }
 }
 
 interface LiveSessionCallbacks {
@@ -443,8 +459,12 @@ export class LiveSessionManager {
                 if (this.currentInputLevel < 0.015) { inputData.fill(0); }
                 
                 const pcm16 = downsampleTo16k(inputData, this.inputAudioContext.sampleRate);
-                const base64Pcm = encodeBase64(new Uint8Array(pcm16.buffer));
-                this.sessionPromise.then(s => s.sendRealtimeInput({ audio: { data: base64Pcm, mimeType: 'audio/pcm;rate=16000' } })).catch(()=>{});
+                if (pcm16 && pcm16.buffer && pcm16.length > 0) {
+                    const base64Pcm = encodeBase64(new Uint8Array(pcm16.buffer));
+                    if (base64Pcm) {
+                        this.sessionPromise.then(s => s.sendRealtimeInput({ audio: { data: base64Pcm, mimeType: 'audio/pcm;rate=16000' } })).catch(()=>{});
+                    }
+                }
             };
             this.mediaStreamSource.connect(this.scriptProcessor);
             this.scriptProcessor.connect(this.inputAudioContext.destination);
@@ -534,9 +554,15 @@ export class LiveSessionManager {
       if (message.serverContent?.modelTurn?.parts && this.outputAudioContext) {
           for (const part of message.serverContent.modelTurn.parts) {
               if (part.inlineData?.data) {
-                  const audioBytes = decodeBase64(part.inlineData.data);
-                  const audioBuffer = await decodePcmAudioData(audioBytes, this.outputAudioContext);
-                  this.queueAudio(audioBuffer);
+                  try {
+                      const audioBytes = decodeBase64(part.inlineData.data);
+                      const audioBuffer = await decodePcmAudioData(audioBytes, this.outputAudioContext);
+                      if (audioBuffer) {
+                          this.queueAudio(audioBuffer);
+                      }
+                  } catch (e) {
+                      console.warn("Error decoding server audio chunk:", e);
+                  }
               }
           }
       }
@@ -563,25 +589,29 @@ export class LiveSessionManager {
       }
   }
   
-  private queueAudio(buffer: AudioBuffer): void {
-      if (!this.outputAudioContext || !this.outputAnalyser) return;
-      const currentTime = this.outputAudioContext.currentTime;
-      
-      // Ensure smooth continuous playback timing without buffer gaps or overlaps
-      if (this.nextAudioStartTime < currentTime) {
-          this.nextAudioStartTime = currentTime + 0.05;
+  private queueAudio(buffer: AudioBuffer | null): void {
+      if (!buffer || !this.outputAudioContext || !this.outputAnalyser) return;
+      try {
+          const currentTime = this.outputAudioContext.currentTime;
+          
+          // Ensure smooth continuous playback timing without buffer gaps or overlaps
+          if (this.nextAudioStartTime < currentTime) {
+              this.nextAudioStartTime = currentTime + 0.05;
+          }
+          
+          const source = this.outputAudioContext.createBufferSource();
+          source.buffer = buffer;
+          source.connect(this.outputAnalyser); 
+          source.start(this.nextAudioStartTime);
+          this.nextAudioStartTime += buffer.duration;
+          
+          this.activeAudioSources.add(source);
+          source.onended = () => {
+              try { source.disconnect(); } catch (e) {}
+              this.activeAudioSources.delete(source);
+          };
+      } catch (e) {
+          console.warn("queueAudio playback error:", e);
       }
-      
-      const source = this.outputAudioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.outputAnalyser); 
-      source.start(this.nextAudioStartTime);
-      this.nextAudioStartTime += buffer.duration;
-      
-      this.activeAudioSources.add(source);
-      source.onended = () => {
-          try { source.disconnect(); } catch (e) {}
-          this.activeAudioSources.delete(source);
-      };
   }
 }

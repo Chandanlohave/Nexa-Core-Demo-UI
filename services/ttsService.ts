@@ -87,31 +87,47 @@ const initAudioContext = () => {
     }
 };
 
-function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+function decodeBase64(base64: string): Uint8Array {
+  if (!base64 || typeof base64 !== 'string') return new Uint8Array(0);
+  try {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  } catch (e) {
+    console.warn("Base64 decoding failed", e);
+    return new Uint8Array(0);
   }
-  return bytes;
 }
 
-async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
+async function decodePcmAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (!ctx) return null;
   const sampleRate = 24000;
   const numChannels = 1;
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  const channelData = buffer.getChannelData(0);
-  for (let i = 0; i < frameCount; i++) {
-    channelData[i] = dataInt16[i] / 32768.0;
+  if (!data || !data.buffer || data.byteLength === 0) {
+    return ctx.createBuffer(numChannels, 1, sampleRate);
   }
-  return buffer;
+  try {
+    const dataInt16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
+    const frameCount = Math.max(1, Math.floor(dataInt16.length / numChannels));
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i] / 32768.0;
+    }
+    return buffer;
+  } catch (err) {
+    console.warn("decodePcmAudioData error:", err);
+    return ctx.createBuffer(numChannels, 1, sampleRate);
+  }
 }
 
-const playAudioBuffer = (buffer: AudioBuffer, sessionId: number, onStart: () => void, onEnd: () => void) => {
-    if (!audioCtx || sessionId !== currentSessionId) {
+const playAudioBuffer = (buffer: AudioBuffer | null, sessionId: number, onStart: () => void, onEnd: () => void) => {
+    if (!audioCtx || !buffer || sessionId !== currentSessionId) {
+        if (sessionId === currentSessionId) onEnd();
         return;
     }
     
@@ -125,25 +141,32 @@ const playAudioBuffer = (buffer: AudioBuffer, sessionId: number, onStart: () => 
         currentSource = null;
     }
 
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    
-    source.onended = () => {
-        if (currentSource === source) {
-            currentSource = null;
-            if (sessionId === currentSessionId) {
-                onEnd();
+    try {
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        
+        source.onended = () => {
+            if (currentSource === source) {
+                currentSource = null;
+                if (sessionId === currentSessionId) {
+                    onEnd();
+                }
             }
+            try { source.disconnect(); } catch (e) {}
+        };
+        
+        currentSource = source;
+        if (sessionId === currentSessionId) {
+            onStart();
         }
-        try { source.disconnect(); } catch (e) {}
-    };
-    
-    currentSource = source;
-    if (sessionId === currentSessionId) {
-        onStart();
+        source.start(0);
+    } catch (e) {
+        console.warn("playAudioBuffer error:", e);
+        if (sessionId === currentSessionId) {
+            onEnd();
+        }
     }
-    source.start(0);
 };
 
 const generateAndPlay = async (user: UserProfile, text: string, cacheKey: string | null, naughtyModeOverride: boolean, onStart: () => void, onEnd: () => void) => {

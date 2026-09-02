@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'lucide-react'],
+    },
     // Define process.env to make environment variables available in the client-side code
     define: {
       // FIX: Checks for all standard Gemini API key environment variable variants. Defaults to '' to prevent undefined crash.

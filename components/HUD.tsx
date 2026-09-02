@@ -89,30 +89,30 @@ const ClassicHUD: React.FC<{
     }
 
     const getThemeColors = (isDark: boolean) => {
-      // 1. WARNING - RED (Aggressive)
-      if (state === HUDState.WARNING) return ['#FF0000', '#FF3333', '#800000']; 
+      // 1. WARNING - RED
+      if (state === HUDState.WARNING) return isDark ? ['#FF0000', '#FF3333', '#800000'] : ['#DC2626', '#EF4444', '#991B1B']; 
       
-      // 2. GLITCH (Strike 2) - DARK RED/BLACK (Chaos)
-      if (state === HUDState.GLITCH) return ['#8B0000', '#000000', '#FF0000'];
+      // 2. GLITCH - DARK RED/BLACK
+      if (state === HUDState.GLITCH) return isDark ? ['#8B0000', '#000000', '#FF0000'] : ['#991B1B', '#1E293B', '#DC2626'];
 
-      // 3. LIVE MODE & VISION MODE - STRICTLY GREEN (Military/Night Vision Vibe)
-      if (state === HUDState.LIVE || state === HUDState.WATCHING) return ['#00FF00', '#004400', '#CCFFCC'];
+      // 3. LIVE MODE & VISION MODE - GREEN
+      if (state === HUDState.LIVE || state === HUDState.WATCHING) return isDark ? ['#00FF00', '#004400', '#CCFFCC'] : ['#059669', '#10B981', '#047857'];
 
       // 4. REPAIRING - WHITE/GREY
-      if (state === HUDState.REPAIRING) return ['#FFFFFF', '#E2E8F0', '#94A3B8'];
+      if (state === HUDState.REPAIRING) return isDark ? ['#FFFFFF', '#E2E8F0', '#94A3B8'] : ['#0F172A', '#334155', '#64748B'];
       
-      // 5. CODING - MATRIX GREEN (Darker)
-      if (state === HUDState.CODING) return ['#0F0', '#003B00', '#008F11']; 
+      // 5. CODING - MATRIX GREEN
+      if (state === HUDState.CODING) return isDark ? ['#0F0', '#003B00', '#008F11'] : ['#16A34A', '#15803D', '#166534']; 
 
       // 6. IDLE/DEFAULT - ACCENT COLOR
-      const primary = accentColor;
-      let secondary = adjustColor(accentColor, 40);
-      let tertiary = adjustColor(accentColor, -40);
+      const primary = accentColor || '#29DFFF';
+      let secondary = '#00F0FF';
+      let tertiary = '#38BDF8';
       return [primary, secondary, tertiary];
     };
 
-    // REDUCE PARTICLES IN ECO MODE
-    const particleCount = state === HUDState.CODING ? 0 : (ecoMode ? 200 : 900); 
+    // REDUCE PARTICLES FOR BUTTERY 60FPS
+    const particleCount = state === HUDState.CODING ? 0 : (ecoMode ? 100 : 250); 
     
     if (state !== HUDState.CODING && (particlesRef.current.length === 0 || particlesRef.current.length !== particleCount)) {
         particlesRef.current = [];
@@ -123,7 +123,7 @@ const ClassicHUD: React.FC<{
                 phi: Math.acos(2 * Math.random() - 1),
                 originalR: r + (Math.random() - 0.5) * 20,
                 r: r,
-                size: (Math.random() * 1.5 + 0.5),
+                size: (Math.random() * 1.4 + 0.5),
                 speedOffset: Math.random() * 0.02,
                 blinkOffset: Math.random() * 100,
                 randomPhase: Math.random() * Math.PI * 2
@@ -139,15 +139,10 @@ const ClassicHUD: React.FC<{
           return;
       }
 
-      // ECO MODE: Limit FPS (Simple Skip)
-      if (ecoMode) {
-          const delta = time - lastTime;
-          if (delta < 33) { // ~30 FPS Cap
-              requestRef.current = requestAnimationFrame(animate);
-              return;
-          }
-          lastTime = time;
-      }
+      const now = performance.now();
+      const dt = lastTime > 0 ? Math.min(0.04, (now - lastTime) / 1000) : 0.016;
+      lastTime = now;
+      const timeScale = dt * 60;
 
       if(!canvas || !containerRef.current) return;
       
@@ -189,7 +184,7 @@ const ClassicHUD: React.FC<{
               
               if (isBright) {
                   ctx.fillStyle = '#FFF'; // White tip
-                  ctx.shadowBlur = 8;
+                  ctx.shadowBlur = 6;
                   ctx.shadowColor = '#FFF';
               } else {
                   ctx.fillStyle = '#0F0'; // Classic Green
@@ -214,7 +209,7 @@ const ClassicHUD: React.FC<{
           ctx.fillRect(width/2 - 150, height/2 - 40, 300, 80);
           
           ctx.shadowColor = '#0F0';
-          ctx.shadowBlur = 10;
+          ctx.shadowBlur = 8;
           ctx.font = '700 24px Rajdhani';
           ctx.fillStyle = '#FFF';
           ctx.textAlign = 'center';
@@ -230,20 +225,20 @@ const ClassicHUD: React.FC<{
 
       // --- SPHERE MODE (NORMAL) ---
       let speedMultiplier = rotationSpeed || 1;
-      if (state === HUDState.SPEAKING) speedMultiplier *= 1.5;
-      if (state === HUDState.THINKING) speedMultiplier *= 2.5;
-      if (state === HUDState.GLITCH) speedMultiplier *= 5; // ULTRA FAST
+      if (state === HUDState.SPEAKING) speedMultiplier *= 1.4;
+      if (state === HUDState.THINKING) speedMultiplier *= 2.2;
+      if (state === HUDState.GLITCH) speedMultiplier *= 4;
       
       const currentAudio = audioRef?.current; 
 
       if (currentAudio) {
-          const smoothFactor = 0.2; 
+          const smoothFactor = Math.min(1, 0.2 * timeScale); 
           smoothedAudioRef.current.vol = lerp(smoothedAudioRef.current.vol, currentAudio.vol, smoothFactor);
           smoothedAudioRef.current.bass = lerp(smoothedAudioRef.current.bass, currentAudio.bass, smoothFactor);
           smoothedAudioRef.current.mid = lerp(smoothedAudioRef.current.mid, currentAudio.mid, smoothFactor);
           smoothedAudioRef.current.treble = lerp(smoothedAudioRef.current.treble, currentAudio.treble, smoothFactor);
       } else {
-          const decay = 0.05;
+          const decay = Math.min(1, 0.05 * timeScale);
           smoothedAudioRef.current.vol = lerp(smoothedAudioRef.current.vol, 0, decay);
           smoothedAudioRef.current.bass = lerp(smoothedAudioRef.current.bass, 0, decay);
           smoothedAudioRef.current.mid = lerp(smoothedAudioRef.current.mid, 0, decay);
@@ -252,33 +247,33 @@ const ClassicHUD: React.FC<{
 
       const { vol, bass, mid, treble } = smoothedAudioRef.current;
 
-      rotationRef.current.y += (0.003 + (mid * 0.01)) * speedMultiplier;
-      rotationRef.current.x += (0.001 + (treble * 0.005)) * speedMultiplier;
+      rotationRef.current.y += (0.003 + (mid * 0.008)) * speedMultiplier * timeScale;
+      rotationRef.current.x += (0.001 + (treble * 0.004)) * speedMultiplier * timeScale;
       
       // GLITCH JITTER
       let glitchOffsetX = 0, glitchOffsetY = 0;
       if (state === HUDState.GLITCH) {
-          glitchOffsetX = (Math.random() - 0.5) * 10;
-          glitchOffsetY = (Math.random() - 0.5) * 10;
+          glitchOffsetX = (Math.random() - 0.5) * 8;
+          glitchOffsetY = (Math.random() - 0.5) * 8;
       }
 
       const breathSpeed = 0.002;
-      const breathAmp = baseRadius * 0.1; // Dynamic breathing amplitude based on size
+      const breathAmp = baseRadius * 0.08;
       const globalExpansion = Math.sin(time * breathSpeed) * breathAmp;
-      const audioExpansion = bass * (baseRadius * 0.4); // Dynamic bass punch
+      const audioExpansion = bass * (baseRadius * 0.35);
 
-      // Glow
+      // Glow (Subtle and controlled when shrunk)
       let glowColor = colors[0];
-      const glowSize = baseRadius * 1.5 + (vol * baseRadius);
+      const glowSize = baseRadius * 1.3 + (vol * baseRadius * 0.6);
       const gradient = ctx.createRadialGradient(width/2 + glitchOffsetX, height/2 + glitchOffsetY, baseRadius * 0.2, width/2, height/2, glowSize);
-      gradient.addColorStop(0, `${glowColor}44`);
-      gradient.addColorStop(0.5, `${glowColor}11`);
+      gradient.addColorStop(0, isDarkMode ? `${glowColor}18` : `${glowColor}0A`);
+      gradient.addColorStop(0.5, isDarkMode ? `${glowColor}06` : `${glowColor}02`);
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
       
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
 
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = isDarkMode ? 'lighter' : 'source-over';
       
       particlesRef.current.forEach((p, i) => {
         let shake = treble * 3 * Math.sin(time * 0.1 + i);
@@ -318,7 +313,7 @@ const ClassicHUD: React.FC<{
         
         const blink = Math.sin(time * 0.005 + p.blinkOffset);
         const brightness = 0.6 + blink * 0.4 + (vol * 1.5); 
-        ctx.globalAlpha = Math.min(1, Math.max(0.1, alpha * brightness));
+        ctx.globalAlpha = Math.min(1, Math.max(0.08, alpha * brightness * (isDarkMode ? 1.0 : 0.8)));
         ctx.fill();
       });
 
@@ -331,9 +326,9 @@ const ClassicHUD: React.FC<{
       ctx.font = `700 ${fontSize}px Rajdhani, sans-serif`; 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = mainTextColor;
-      ctx.shadowBlur = 15 + (vol * 20);
-      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor = isDarkMode ? mainTextColor : 'rgba(41, 223, 255, 0.45)';
+      ctx.shadowBlur = isDarkMode ? (15 + (vol * 20)) : 8;
+      ctx.fillStyle = isDarkMode ? '#FFFFFF' : '#0284C7';
       
       let displayText = "NEXA";
       if (state === HUDState.GLITCH) {
