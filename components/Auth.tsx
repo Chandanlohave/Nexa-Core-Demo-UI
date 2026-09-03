@@ -32,7 +32,7 @@ const BracketInput = ({ name, placeholder, type = 'text', value, onChange, autoF
       : 'text-zinc-800 dark:text-white';
 
   return (
-    <div className="relative group z-50 my-4">
+    <div className="relative group z-50 my-2.5 sm:my-3.5">
       <div className="flex items-center">
         <span className={`${colorClass} opacity-50 text-2xl font-light group-focus-within:opacity-100 transition-opacity duration-300`}>[</span>
         <input
@@ -357,24 +357,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className={`fixed inset-0 flex flex-col items-center justify-center p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] z-[60] overflow-hidden transition-colors duration-500 ${isBlacklisted ? 'bg-red-950 text-red-500' : 'bg-zinc-100 dark:bg-black'}`}>
+    <div className={`fixed inset-0 flex flex-col items-center justify-between p-4 sm:p-6 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-[60] overflow-y-auto overflow-x-hidden transition-colors duration-500 ${isBlacklisted ? 'bg-red-950 text-red-500' : 'bg-zinc-100 dark:bg-black'}`}>
       {/* Visual Background Effects */}
-      <div className="absolute inset-0 z-0 opacity-20"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
+      <div className="absolute inset-0 z-0 opacity-20 pointer-events-none"><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-slow"></div><div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-zinc-400 dark:border-nexa-cyan/20 rounded-full animate-spin-reverse-slow"></div></div>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(41,223,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(41,223,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] z-0 pointer-events-none"></div>
       
-      <div className="absolute top-8 mt-[env(safe-area-inset-top)] text-center animate-fade-in z-50">
+      {/* Brand Header: In-flow so it NEVER overlaps with ACCESS_GATEWAY */}
+      <div className="w-full text-center shrink-0 mb-3 sm:mb-5 animate-fade-in z-50">
         <div className="text-[9px] text-zinc-500 dark:text-nexa-cyan/50 font-mono tracking-[0.3em]">CREATED & DESIGNED BY</div>
-        <div className="text-lg font-bold text-zinc-800 dark:text-white tracking-[0.2em]">CHANDAN LOHAVE</div>
-      </div>
-      
-      <div className="absolute bottom-4 mb-[env(safe-area-inset-bottom)] left-0 w-full text-center z-50">
-          <div className="text-[9px] text-zinc-500 dark:text-zinc-600 font-mono tracking-widest uppercase">
-              &copy; COPYRIGHT RESERVED BY CHANDAN LOHAVE 2025
-          </div>
+        <div className="text-base sm:text-lg font-bold text-zinc-800 dark:text-white tracking-[0.2em]">CHANDAN LOHAVE</div>
       </div>
       
       {mode === 'INIT' && !isBlacklisted && (
-          <button onClick={() => setMode('KEY_INPUT')} className="absolute top-6 right-6 mt-[env(safe-area-inset-top)] p-2 text-nexa-cyan/50 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/30 transition-all z-[70] group">
+          <button onClick={() => setMode('KEY_INPUT')} className="fixed top-4 right-4 sm:top-6 sm:right-6 mt-[env(safe-area-inset-top)] p-2 text-nexa-cyan/50 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/30 transition-all z-[70] group">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
               <span className="absolute right-8 top-2 text-[9px] font-mono tracking-widest opacity-0 group-hover:opacity-100 whitespace-nowrap bg-black px-2 py-1 border border-nexa-cyan/30">
                   {hasCustomKey ? 'KEY ACTIVE' : 'SETUP KEY'}
@@ -386,13 +381,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       {/* PWA INSTALL BUTTON */}
       <InstallPWAButton />
 
-      <div className="relative w-full max-w-sm z-50">
-        <div className={`absolute -top-4 -left-4 w-8 h-8 border-t-2 border-l-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -top-4 -right-4 w-8 h-8 border-t-2 border-r-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -left-4 w-8 h-8 border-b-2 border-l-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div><div className={`absolute -bottom-4 -right-4 w-8 h-8 border-b-2 border-r-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} transition-all duration-500 hover:w-12 hover:h-12`}></div>
-        <div className={`flex justify-between items-center mb-8 border-b ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500/20' : 'border-nexa-cyan/20'} pb-2 transition-colors duration-500`}>
+      <div className="relative w-full max-w-[360px] sm:max-w-sm my-auto z-50 px-1 sm:px-0">
+        {/* 4 Cyber Corner Brackets: Perfectly fitted with safe inset margins */}
+        <div className={`absolute -top-2.5 -left-1 sm:-top-3 sm:-left-2.5 w-6 h-6 sm:w-8 sm:h-8 border-t-2 border-l-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} pointer-events-none transition-all duration-300 z-20`}></div>
+        <div className={`absolute -top-2.5 -right-1 sm:-top-3 sm:-right-2.5 w-6 h-6 sm:w-8 sm:h-8 border-t-2 border-r-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} pointer-events-none transition-all duration-300 z-20`}></div>
+        <div className={`absolute -bottom-2.5 -left-1 sm:-bottom-3 sm:-left-2.5 w-6 h-6 sm:w-8 sm:h-8 border-b-2 border-l-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} pointer-events-none transition-all duration-300 z-20`}></div>
+        <div className={`absolute -bottom-2.5 -right-1 sm:-bottom-3 sm:-right-2.5 w-6 h-6 sm:w-8 sm:h-8 border-b-2 border-r-2 ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500' : 'border-nexa-cyan'} pointer-events-none transition-all duration-300 z-20`}></div>
+
+        <div className={`flex justify-between items-center mb-4 sm:mb-6 border-b ${mode === 'ADMIN' || isBlacklisted ? 'border-red-500/20' : 'border-nexa-cyan/20'} pb-2 transition-colors duration-500`}>
            <div className={`text-[10px] ${mode === 'ADMIN' || isBlacklisted ? 'text-red-500' : 'text-nexa-cyan'} font-mono tracking-widest`}>{glitchText}</div>
            <div className="flex gap-1"><div className={`w-1 h-1 ${mode === 'ADMIN' || isBlacklisted ? 'bg-red-500' : 'bg-nexa-cyan'} animate-pulse`}></div><div className={`w-1 h-1 ${mode === 'ADMIN' || isBlacklisted ? 'bg-red-500' : 'bg-nexa-cyan'} animate-pulse delay-75`}></div><div className={`w-1 h-1 ${mode === 'ADMIN' || isBlacklisted ? 'bg-red-500' : 'bg-nexa-cyan'} animate-pulse delay-150`}></div></div>
         </div>
-        <div className={`backdrop-blur-md border p-6 relative transition-all duration-500 ${mode === 'ADMIN' || isBlacklisted ? 'bg-red-900/10 border-red-500/20' : 'bg-white/60 dark:bg-black/60 border-zinc-200 dark:border-nexa-cyan/10'}`}>
+        <div className={`backdrop-blur-md border p-4 sm:p-6 relative transition-all duration-500 ${mode === 'ADMIN' || isBlacklisted ? 'bg-red-900/10 border-red-500/20' : 'bg-white/60 dark:bg-black/60 border-zinc-200 dark:border-nexa-cyan/10'}`}>
           {error && <div className="mb-6 p-2 bg-red-900/20 border-l-2 border-red-500 text-red-500 text-[10px] font-mono tracking-wider animate-pulse">{error}</div>}
           
           {isBlacklisted ? (
@@ -617,6 +617,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </>
           )}
 
+        </div>
+      </div>
+
+      {/* Footer Copyright: In-flow so it NEVER overlaps or cuts off the bottom corners */}
+      <div className="w-full text-center shrink-0 mt-3 sm:mt-5 z-50">
+        <div className="text-[9px] text-zinc-500 dark:text-zinc-600 font-mono tracking-widest uppercase">
+          &copy; COPYRIGHT RESERVED BY CHANDAN LOHAVE 2025
         </div>
       </div>
     </div>

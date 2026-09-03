@@ -55,49 +55,96 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, isOffline }: any) => (
-    <div className="w-full shrink-0 flex justify-between items-center px-3 sm:px-6 pt-[max(0.5rem,env(safe-area-inset-top))] pb-1.5 min-h-[46px] sm:min-h-[52px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-                {photoUrl ? (
-                    <img src={photoUrl} alt={userName} className="w-6 h-6 rounded-full border border-nexa-cyan/50 object-cover shadow-[0_0_8px_rgba(41,223,255,0.4)]" />
-                ) : (
-                    <div className="w-6 h-6 rounded-full bg-nexa-cyan/20 border border-nexa-cyan/50 flex items-center justify-center text-[10px] font-bold text-nexa-cyan">
-                        {userName?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
-                )}
-                <div className="text-base sm:text-lg font-bold tracking-[0.2em] sm:tracking-[0.25em] text-zinc-900 dark:text-white drop-shadow-[0_0_10px_rgba(41,223,255,0.6)]">NEXA</div>
-                <div className="hidden sm:block text-[9px] text-nexa-cyan font-mono tracking-widest uppercase border-l border-cyan-500/30 pl-2">{userName}</div>
-            </div>
-            {isOffline ? (
-                <div className="text-[9px] font-mono text-red-500 border-l border-red-500 pl-2 animate-pulse">OFFLINE</div>
-            ) : (
-                latency !== null && (<div className="hidden md:block text-[9px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-2">LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)
-            )}
-        </div>
+const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, isOffline }: any) => {
+    const firstName = React.useMemo(() => {
+        if (!userName) return 'USER';
+        const clean = userName.trim();
+        if (clean.includes('@')) {
+            const handle = clean.split('@')[0].split(/[._0-9]/)[0];
+            return handle ? (handle.charAt(0).toUpperCase() + handle.slice(1).toLowerCase()) : 'USER';
+        }
+        const first = clean.split(/\s+/)[0];
+        return first.charAt(0).toUpperCase() + first.slice(1);
+    }, [userName]);
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <button 
-                onClick={onToggleHudMode}
-                className="px-2.5 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-mono text-[9px] sm:text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
-                title="Toggle Matrix / Classic HUD"
-            >
-                {hudMode === 'matrix' ? '🌐 MATRIX' : '⭕ CLASSIC'}
-            </button>
-            <button onClick={onStudyHub} className="p-1 sm:p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative cursor-pointer shrink-0" title="Study Buddy">
-                <StudyIcon />
-                <span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">STUDY BUDDY</span>
-            </button>
-            <button onClick={onSettings} className="p-1 sm:p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors relative group cursor-pointer shrink-0" title="Settings">
-                <GearIcon />
-                {userRole === UserRole.ADMIN && (
-                    <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+    return (
+        <div className="w-full shrink-0 grid grid-cols-[auto_1fr_auto] items-center px-2.5 sm:px-5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1 min-h-[44px] sm:min-h-[48px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
+            {/* Left Column: User First Name badge + Anchored Study Buddy Icon */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div 
+                    onClick={onSettings}
+                    className="flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-nexa-cyan/10 border border-nexa-cyan/30 text-nexa-cyan shadow-sm cursor-pointer hover:bg-nexa-cyan/20 transition-all select-none shrink-0"
+                    title="User Profile & Settings"
+                >
+                    {photoUrl ? (
+                        <img src={photoUrl} alt={firstName} className="w-4 h-4 rounded-full border border-nexa-cyan/50 object-cover shrink-0" />
+                    ) : userRole === UserRole.ADMIN ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                            <span className="text-[8px] font-bold text-red-400">ADM</span>
+                        </div>
+                    ) : (
+                        <div className="w-1.5 h-1.5 rounded-full bg-nexa-cyan animate-pulse shrink-0"></div>
+                    )}
+                    <span className="text-[9px] sm:text-[10px] font-mono font-bold tracking-wider uppercase text-zinc-900 dark:text-nexa-cyan">
+                        {firstName}
+                    </span>
+                </div>
+
+                {/* Study Buddy Icon placed next to user name badge */}
+                <button 
+                    onClick={onStudyHub} 
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-zinc-600 dark:text-nexa-cyan/80 hover:text-nexa-cyan hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 border border-transparent hover:border-nexa-cyan/20 transition-colors group relative cursor-pointer shrink-0" 
+                    title="Study Buddy"
+                >
+                    <StudyIcon />
+                    <span className="absolute -bottom-8 left-0 text-[8px] font-mono bg-zinc-900 text-nexa-cyan border border-nexa-cyan/30 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50 shadow-md">STUDY BUDDY</span>
+                </button>
+
+                {isOffline ? (
+                    <div className="text-[8px] font-mono text-red-500 border-l border-red-500 pl-1.5 animate-pulse shrink-0">OFFLINE</div>
+                ) : (
+                    latency !== null && (<div className="hidden lg:block text-[8px] font-mono text-zinc-500 dark:text-nexa-cyan/60 border-l border-zinc-200 dark:border-nexa-cyan/20 pl-1.5 shrink-0">LATENCY: <span className="text-zinc-800 dark:text-white">{latency}ms</span></div>)
                 )}
-            </button>
-            <button onClick={onLogout} className="p-1 sm:p-1.5 hover:bg-red-500/10 rounded-full transition-colors cursor-pointer shrink-0" title="Logout"><LogoutIcon /></button>
+            </div>
+
+            {/* Center Column: Perfectly centered N.E.X.A. title that CAN NEVER overlap left/right items */}
+            <div className="flex items-center justify-center px-1 text-center min-w-0">
+                <span className="font-mono font-bold text-xs sm:text-sm tracking-[0.18em] sm:tracking-[0.28em] text-zinc-900 dark:text-white drop-shadow-[0_0_8px_rgba(41,223,255,0.6)] select-none truncate">
+                    N.E.X.A.
+                </span>
+            </div>
+
+            {/* Right Column: Compact HUD Mode button + Settings + Logout */}
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 justify-end">
+                <button 
+                    onClick={onToggleHudMode}
+                    className="h-6 sm:h-7 px-1.5 sm:px-2 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-mono text-[8px] sm:text-[9px] font-semibold flex items-center justify-center gap-0.5 sm:gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+                    title="Toggle Matrix / Classic HUD"
+                >
+                    {hudMode === 'matrix' ? '🌐 MATRIX' : '⭕ CLASSIC'}
+                </button>
+                <button 
+                    onClick={onSettings} 
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 text-zinc-600 dark:text-zinc-300 hover:text-nexa-cyan transition-colors relative group cursor-pointer shrink-0" 
+                    title="Settings"
+                >
+                    <GearIcon />
+                    {userRole === UserRole.ADMIN && (
+                        <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                    )}
+                </button>
+                <button 
+                    onClick={onLogout} 
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center hover:bg-red-500/10 text-zinc-600 dark:text-zinc-300 hover:text-red-400 transition-colors cursor-pointer shrink-0" 
+                    title="Logout"
+                >
+                    <LogoutIcon />
+                </button>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputMode, onInputModeChange, textInput, onTextInputChange, onTextSubmit, textInputPlaceholder, onFileUpload, isLive, isCameraActive, onToggleCamera, showChat, pendingFile, onToggleTorch, isTorchOn, onTagAgent }: any) => {
     const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB, isLiveMode = hudState === HUDState.LIVE, isWatching = hudState === HUDState.WATCHING, isGenerating = hudState === HUDState.GENERATING, isRepairing = hudState === HUDState.REPAIRING, isCoding = hudState === HUDState.CODING, isGlitch = hudState === HUDState.GLITCH;
