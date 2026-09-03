@@ -8,6 +8,8 @@ export interface TaskAssignment {
   title?: string;
   category: 'CODE' | 'SECURITY' | 'DESIGN' | 'VOICE' | 'RESEARCH' | 'STRATEGY';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  progress?: number;
+  stepDesc?: string;
 }
 
 const AGENT_LIST = [

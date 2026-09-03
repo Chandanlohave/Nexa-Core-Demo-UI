@@ -1057,16 +1057,39 @@ export const AgentVirtualOffice = ({
   activeAgentId, 
   hudState,
   user,
-  onDirectChat
+  onDirectChat,
+  onClose
 }: { 
   activeAgentId: string | null, 
   hudState: string | null,
   user?: UserProfile | null,
-  onDirectChat?: (agentName: string) => void
+  onDirectChat?: (agentName: string) => void,
+  onClose?: () => void
 }) => {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [isCelebration, setIsCelebration] = useState(false);
-  const [currentTimeHour, setCurrentTimeHour] = useState(() => new Date().getHours());
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const currentTimeHour = currentDate.getHours();
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  const formatTime12 = (date: Date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${hours}:${minutes}${ampm}`;
+  };
 
   // --- INTERACTIVE FEATURE MODAL STATES ---
   const [showPoolModal, setShowPoolModal] = useState(false);
@@ -1171,11 +1194,11 @@ export const AgentVirtualOffice = ({
     };
   }, []);
 
-  // 1. Live Time of Day Watcher for Real-time Lighting
+  // 1. Live Time of Day Watcher for Real-time Lighting & Clock Display
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTimeHour(new Date().getHours());
-    }, 60000);
+      setCurrentDate(new Date());
+    }, 10000);
     return () => clearInterval(timer);
   }, []);
 
@@ -1627,7 +1650,7 @@ export const AgentVirtualOffice = ({
     // Real-Time AI Execution via Gemini API
     try {
       const promptText = `Task Directive for ${agentMeta.name} (${category} Expert): "${taskTitle}". Generate a concise, professional, action-oriented result summary in Hinglish/English.`;
-      const response = await generateTextResponse(promptText, userProfile || ({ name: 'Commander', role: 'ADMIN', voice: 'Aoede' } as UserProfile));
+      const response = await generateTextResponse(promptText, user || ({ name: 'Commander', role: 'ADMIN', voice: 'Aoede' } as UserProfile));
       const aiText = response?.text || `${agentMeta.name} completed task "${taskTitle}" with optimal parameters.`;
 
       setActiveTasks(prev => ({
@@ -1651,7 +1674,7 @@ export const AgentVirtualOffice = ({
 
       // Speak AI Agent response aloud
       speakAgentText(
-        userProfile || ({ voice: 'Aoede' } as any),
+        user || ({ voice: 'Aoede' } as any),
         `${agentMeta.name} Task Complete: ${aiText.slice(0, 150)}`,
         (agentMeta as any).voiceKey || 'Aoede',
         'Female',
@@ -1851,7 +1874,7 @@ export const AgentVirtualOffice = ({
       `}</style>
 
       {/* Top Ambient Time, Atmosphere & Feature Action Bar */}
-      <div className="w-full max-w-[560px] flex flex-col gap-1.5 px-2 py-1 text-[10px] text-zinc-400 font-mono">
+      <div className="w-full max-w-full sm:max-w-2xl flex flex-col gap-1.5 px-2 py-1 text-[10px] text-zinc-400 font-mono">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
@@ -1872,13 +1895,30 @@ export const AgentVirtualOffice = ({
                 ⚡ SQUAD SYNCED
               </span>
             )}
-            <span className="text-zinc-500 font-mono text-[9px]">
-              {currentTimeHour.toString().padStart(2, '0')}:00 HRS
+            <span className="text-zinc-400 font-mono text-[9px] font-medium tracking-wide">
+              {formatTime12(currentDate)}
             </span>
+            <button 
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
+              className="text-cyan-400 hover:text-white bg-cyan-950/60 hover:bg-cyan-900/60 px-2 py-0.5 rounded border border-cyan-800/60 text-[9px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+              title={isMinimized ? "Expand Virtual Office" : "Minimize Virtual Office"}
+            >
+              {isMinimized ? '▲ EXPAND' : '▼ MIN'}
+            </button>
+            {onClose && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onClose(); }} 
+                className="text-red-500 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded border border-red-500/30 text-[9px] font-bold transition-colors ml-1 cursor-pointer flex items-center gap-1"
+              >
+                ✕ HIDE
+              </button>
+            )}
           </div>
         </div>
 
         {/* --- INTERACTIVE ACTION BUTTONS TOOLBAR --- */}
+        {!isMinimized && (
         <div className="flex items-center justify-between gap-1 overflow-x-auto pb-0.5 scrollbar-none">
           <div className="flex items-center gap-1">
             <button
@@ -1989,10 +2029,12 @@ export const AgentVirtualOffice = ({
             <span>{isTourActive ? '⏹ EXIT' : '🎬 TOUR'}</span>
           </button>
         </div>
+        )}
       </div>
       
-      {/* Office SVG Container: Perfectly fits within viewport frame */}
-      <div className="w-full max-w-[560px] aspect-[320/180] relative flex items-center justify-center rounded-lg overflow-hidden border border-zinc-800/60 shadow-2xl bg-[#090b10]">
+      {/* Office SVG Container: Fluidly fits within responsive viewport */}
+      {!isMinimized && (
+      <div className="w-full max-w-full sm:max-w-2xl aspect-[320/180] relative flex items-center justify-center rounded-lg overflow-hidden border border-zinc-800/60 shadow-2xl bg-[#090b10]">
         
         {/* --- GUIDED TOUR CINEMATIC OVERLAY BANNER --- */}
         {isTourActive && (
@@ -2493,6 +2535,7 @@ export const AgentVirtualOffice = ({
           </div>
         )}
       </div>
+      )}
 
       {/* --- INTERACTIVE MODAL OVERLAYS (1 TO 5) --- */}
       {/* 1. Interactive Pool Game Modal */}
@@ -2572,7 +2615,7 @@ export const AgentVirtualOffice = ({
                 type="button"
                 onClick={() => {
                   speakAgentText(
-                    userProfile || ({ voice: 'Aoede' } as any),
+                    user || ({ voice: 'Aoede' } as any),
                     agentTaskResult.responseText,
                     'Aoede',
                     'Female',

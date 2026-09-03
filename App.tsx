@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
+import NebulaOrb from './components/NebulaOrb';
 import { AgentVirtualOffice } from './components/AgentVirtualOffice';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
@@ -55,12 +56,19 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyHub, onSquad, onVault, squadCount = 6, isOffline }: any) => (
-    <div className="w-full shrink-0 flex justify-between items-center px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 min-h-[56px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
-        <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2">
-                <div className="text-lg font-bold tracking-[0.25em] text-zinc-900 dark:text-white drop-shadow-[0_0_10px_rgba(41,223,255,0.6)]">NEXA</div>
-                <div className="hidden xs:block text-[9px] text-nexa-cyan font-mono tracking-widest uppercase border-l border-cyan-500/30 pl-2">{userName}</div>
+const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, isOffline }: any) => (
+    <div className="w-full shrink-0 flex justify-between items-center px-3 sm:px-6 pt-[max(0.5rem,env(safe-area-inset-top))] pb-1.5 min-h-[46px] sm:min-h-[52px] border-b border-zinc-200 dark:border-nexa-cyan/10 bg-white/80 dark:bg-black/80 backdrop-blur-md z-40 relative">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+                {photoUrl ? (
+                    <img src={photoUrl} alt={userName} className="w-6 h-6 rounded-full border border-nexa-cyan/50 object-cover shadow-[0_0_8px_rgba(41,223,255,0.4)]" />
+                ) : (
+                    <div className="w-6 h-6 rounded-full bg-nexa-cyan/20 border border-nexa-cyan/50 flex items-center justify-center text-[10px] font-bold text-nexa-cyan">
+                        {userName?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                )}
+                <div className="text-base sm:text-lg font-bold tracking-[0.2em] sm:tracking-[0.25em] text-zinc-900 dark:text-white drop-shadow-[0_0_10px_rgba(41,223,255,0.6)]">NEXA</div>
+                <div className="hidden sm:block text-[9px] text-nexa-cyan font-mono tracking-widest uppercase border-l border-cyan-500/30 pl-2">{userName}</div>
             </div>
             {isOffline ? (
                 <div className="text-[9px] font-mono text-red-500 border-l border-red-500 pl-2 animate-pulse">OFFLINE</div>
@@ -69,33 +77,25 @@ const StatusBar = ({ userName, userRole, onLogout, onSettings, latency, onStudyH
             )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-            {onVault && (
-                <button
-                    onClick={onVault}
-                    className="px-2.5 py-1 rounded-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 font-mono text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                >
-                    🧠 VAULT
-                </button>
-            )}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button 
-                onClick={onSquad} 
-                className="px-2.5 py-1 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-mono text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
+                onClick={onToggleHudMode}
+                className="px-2.5 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-mono text-[9px] sm:text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+                title="Toggle Matrix / Classic HUD"
             >
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                {squadCount} SQUAD
+                {hudMode === 'matrix' ? '🌐 MATRIX' : '⭕ CLASSIC'}
             </button>
-            <button onClick={onStudyHub} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative cursor-pointer">
+            <button onClick={onStudyHub} className="p-1 sm:p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-blue/20 rounded-full transition-colors group relative cursor-pointer shrink-0" title="Study Buddy">
                 <StudyIcon />
                 <span className="absolute -bottom-8 right-0 text-[9px] font-mono bg-nexa-blue text-black px-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">STUDY BUDDY</span>
             </button>
-            <button onClick={onSettings} className="p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors relative group cursor-pointer">
+            <button onClick={onSettings} className="p-1 sm:p-1.5 hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 rounded-full transition-colors relative group cursor-pointer shrink-0" title="Settings">
                 <GearIcon />
                 {userRole === UserRole.ADMIN && (
                     <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                 )}
             </button>
-            <button onClick={onLogout} className="p-1.5 hover:bg-red-500/10 rounded-full transition-colors cursor-pointer"><LogoutIcon /></button>
+            <button onClick={onLogout} className="p-1 sm:p-1.5 hover:bg-red-500/10 rounded-full transition-colors cursor-pointer shrink-0" title="Logout"><LogoutIcon /></button>
         </div>
     </div>
 );
@@ -287,12 +287,16 @@ const App: React.FC = () => {
             theme: 'dark', 
             accentColor: '#29DFFF',
             ecoMode: false,
-            phoenixEnabled: false
+            phoenixEnabled: false,
+            hudMode: 'classic'
         };
         try {
             const saved = localStorage.getItem('nexa_config');
-            // MERGE SAVED WITH DEFAULTS to prevent undefined properties when new config is added
-            return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return { ...defaults, ...parsed, hudMode: parsed.hudMode || 'classic' };
+            }
+            return defaults;
         } catch(e) {
             return defaults;
         }
@@ -308,6 +312,7 @@ const App: React.FC = () => {
     const [showCustomAgent, setShowCustomAgent] = useState(false);
     const [showMemoryVault, setShowMemoryVault] = useState(false);
     const [showTacticalHub, setShowTacticalHub] = useState(false);
+    const [showVirtualOffice, setShowVirtualOffice] = useState(false);
 
     const [customAgents, setCustomAgents] = useState<any[]>(() => {
         try {
@@ -739,7 +744,7 @@ const App: React.FC = () => {
     }, [user, customAgents, liveSession, config]);
 
     return (
-        <div className="w-screen h-[100dvh] flex flex-col overflow-hidden bg-zinc-100 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300 fixed inset-0">
+        <div className="w-full max-w-[100vw] h-full h-[100dvh] flex flex-col overflow-hidden bg-zinc-100 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300 fixed inset-0" style={{ height: 'var(--app-dvh, 100dvh)' }}>
             <div className="absolute inset-0 pointer-events-none z-0">
                 <video 
                     ref={videoRef} 
@@ -844,29 +849,43 @@ const App: React.FC = () => {
                     <StatusBar 
                         userName={user.name} 
                         userRole={user.role} 
+                        photoUrl={user.photoUrl}
+                        hudMode={config.hudMode}
+                        onToggleHudMode={() => setConfig(prev => {
+                            const next: 'matrix' | 'classic' = prev.hudMode === 'classic' ? 'matrix' : 'classic';
+                            const updated: AppConfig = { ...prev, hudMode: next };
+                            try { localStorage.setItem('nexa_config', JSON.stringify(updated)); } catch(e) {}
+                            return updated;
+                        })}
                         onLogout={handleLogout} 
                         onSettings={handleSettingsClick} 
                         onStudyHub={() => setShowStudyHub(true)} 
-                        onSquad={() => setShowSquad(true)}
-                        onVault={() => setShowMemoryVault(true)}
-                        squadCount={6 + customAgents.length}
                         isOffline={!navigator.onLine} 
                     />
                     
                     <div className="flex-1 relative min-h-0 w-full flex items-center justify-center pointer-events-none">
                         <div className="w-full h-full pointer-events-none">
-                            <HUD 
-                                state={hudState} 
-                                rotationSpeed={config.hudRotationSpeed} 
-                                audioRef={audioRef} 
-                                accentColor={config.accentColor} 
-                                ecoMode={config.ecoMode} 
-                                gestureData={gestureData}
-                                visualMode="NEBULA"
-                                activeHighlightAgentId={activeHighlightAgentId}
-                                customAgents={customAgents}
-                                onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
-                            />
+                            {config.hudMode === 'classic' ? (
+                                <HUD 
+                                    state={hudState} 
+                                    rotationSpeed={config.hudRotationSpeed} 
+                                    audioRef={audioRef} 
+                                    accentColor={config.accentColor} 
+                                    ecoMode={config.ecoMode} 
+                                    gestureData={gestureData}
+                                    visualMode="CLASSIC"
+                                    activeHighlightAgentId={activeHighlightAgentId}
+                                    customAgents={customAgents}
+                                    onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
+                                />
+                            ) : (
+                                <NebulaOrb 
+                                    state={hudState} 
+                                    audioRef={audioRef} 
+                                    customAgents={customAgents}
+                                    activeHighlightAgentId={activeHighlightAgentId}
+                                />
+                            )}
                         </div>
 
                         {/* Top-Right Air Gesture Sensor Switch */}
@@ -895,17 +914,20 @@ const App: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="z-20 pointer-events-auto w-full">
-                        <AgentVirtualOffice 
-                            activeAgentId={activeHighlightAgentId} 
-                            hudState={hudState} 
-                            user={user}
-                            onDirectChat={(agentName: string) => {
-                                setShowChat(true);
-                                setTextInput(`@${agentName} `);
-                            }}
-                        />
-                    </div>
+                    {showVirtualOffice && (
+                        <div className="z-20 pointer-events-auto w-full max-w-full sm:max-w-2xl mx-auto px-1 sm:px-2 shrink-0 animate-fade-in">
+                            <AgentVirtualOffice 
+                                activeAgentId={activeHighlightAgentId} 
+                                hudState={hudState} 
+                                user={user}
+                                onClose={() => setShowVirtualOffice(false)}
+                                onDirectChat={(agentName: string) => {
+                                    setShowChat(true);
+                                    setTextInput(`@${agentName} `);
+                                }}
+                            />
+                        </div>
+                    )}
 
                     <ControlDeck 
                         onMicClick={handleToggleLive}
@@ -952,6 +974,20 @@ const App: React.FC = () => {
                         onViewStudyHub={() => setShowStudyHub(true)} 
                         onVoiceChange={handleVoiceChange} 
                         onOpenTacticalHub={() => setShowTacticalHub(true)}
+                        onOpenPixelOffice={() => {
+                            setShowAdmin(false);
+                            setShowSettings(false);
+                            setShowVirtualOffice(true);
+                        }}
+                        onOpenSquad={() => setShowSquad(true)}
+                        onOpenDebate={() => setShowDebate(true)}
+                        onOpenVault={() => setShowMemoryVault(true)}
+                        onOpenPipeline={() => setShowPipeline(true)}
+                        user={user}
+                        onUserUpdate={(updatedUser) => {
+                            setUser(updatedUser);
+                            try { localStorage.setItem('nexa_user', JSON.stringify(updatedUser)); } catch(e) {}
+                        }}
                     />
                     <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} />
                     <StudyHubPanel isOpen={showStudyHub} onClose={() => setShowStudyHub(false)} user={user} onStartLesson={(subject, topic) => {

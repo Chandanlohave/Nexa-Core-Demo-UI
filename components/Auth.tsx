@@ -242,7 +242,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     
     if (isValid) {
       try { await fetchSystemConfig(); } catch (e) { console.warn("Failed to auto-fetch config", e); }
-      const adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male', warningCount: 0, voice: 'Kore' };
+      let adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male', warningCount: 0, voice: 'Kore' };
+      try {
+        const cloudProfile = await Promise.race([
+          getUserProfile('admin_001'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
+        ]);
+        if (cloudProfile && (cloudProfile as UserProfile).name) {
+          adminProfile = { ...adminProfile, ...(cloudProfile as UserProfile) };
+        }
+      } catch (e) {
+        console.warn("Cloud profile fetch timeout/error, using default local profile.", e);
+      }
       completeLogin(adminProfile);
     } else {
       setLoading(false);

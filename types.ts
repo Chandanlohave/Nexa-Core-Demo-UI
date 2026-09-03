@@ -65,6 +65,9 @@ export interface UserProfile {
   gender: 'male' | 'female' | 'other';
   voice?: VoiceKey; // Voice selection
   warningCount?: number; // Tracks user offenses for the 3-strike rule
+  photoUrl?: string; // Base64 compressed image
+  voiceprintId?: string; // Biometric voiceprint hash
+  voiceEnrolledAt?: number;
 }
 
 export interface AccessKeyDefinition {
@@ -143,6 +146,7 @@ export interface AppConfig {
   accentColor?: string; // HEX Color for the UI Theme
   phoenixEnabled?: boolean; // Safety switch for self-coding
   ecoMode?: boolean; // Battery Saver Mode
+  hudMode?: 'matrix' | 'classic'; // System Matrix HUD Mode
 }
 
 export interface StudyHubSubject {

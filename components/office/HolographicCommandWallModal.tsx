@@ -44,7 +44,11 @@ export const HolographicCommandWallModal = ({
 
   const handleWarRoomToggle = () => {
     if (!isEmergency) {
-      officeAudio?.playEmergencyAlert?.() || officeAudio?.playAlert?.();
+      if (officeAudio?.playEmergencyAlert) {
+        officeAudio.playEmergencyAlert();
+      } else {
+        officeAudio?.playAlert?.();
+      }
     } else {
       officeAudio?.playBlip?.(600);
     }

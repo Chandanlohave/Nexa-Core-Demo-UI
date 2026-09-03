@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NexaAgentNode, UserProfile } from '../types';
 import { NEXA_SQUAD_AGENTS } from '../services/squadService';
-import { generateTopicContent } from '../services/geminiService';
+import { generateTextResponse } from '../services/geminiService';
 import { speakAgentText, stop } from '../services/ttsService';
 
 interface AgentDebateModalProps {
@@ -60,7 +60,8 @@ Provide a crisp 2-3 sentence argument backing your specialty. Speak in natural p
 
       let textA1 = '';
       try {
-        textA1 = await generateTopicContent(promptA1);
+        const resA1 = await generateTextResponse(promptA1, user);
+        textA1 = resA1?.text || `${a1.name}: Proceeding with analysis for ${topic}.`;
       } catch (err) {
         textA1 = `${a2.name}, as ${a1.name}, my analysis shows that optimizing for high throughput and system reliability must take priority on ${topic}!`;
       }
@@ -89,7 +90,8 @@ Provide a smart counter-argument or rebuttal emphasizing your domain (${a2.role}
 
       let textA2 = '';
       try {
-        textA2 = await generateTopicContent(promptA2);
+        const resA2 = await generateTextResponse(promptA2, user);
+        textA2 = resA2?.text || `${a2.name}: Acknowledged. Re-evaluating architecture.`;
       } catch (err) {
         textA2 = `I understand your perspective ${a1.name}, but from ${a2.role} standpoint, code scalability and architectural elegance are paramount!`;
       }

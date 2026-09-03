@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NexaAgentNode, UserProfile } from '../types';
 import { NEXA_SQUAD_AGENTS } from '../services/squadService';
-import { generateTopicContent } from '../services/geminiService';
+import { generateTextResponse } from '../services/geminiService';
 import { speakAgentText, stop } from '../services/ttsService';
 
 interface PipelineModalProps {
@@ -87,7 +87,8 @@ export const PipelineModal: React.FC<PipelineModalProps> = ({ user, agents, onCl
 
       let responseText = '';
       try {
-        responseText = await generateTopicContent(prompt);
+        const res = await generateTextResponse(prompt, user);
+        responseText = res?.text || `✓ Task executed successfully by ${step.agent.name}. Optimal metrics confirmed!`;
       } catch (err) {
         responseText = `✓ Task executed successfully by ${step.agent.name}. Optimal metrics confirmed!`;
       }

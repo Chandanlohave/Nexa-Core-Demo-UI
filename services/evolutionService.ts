@@ -10,6 +10,7 @@ export interface EvolutionMetric {
   adaptiveWeight: number;
   lastOptimizationTimestamp: number;
   evolutionLog: string[];
+  totalInteractionSamples?: number;
   activeHeuristics: {
     conciseness: number;
     analyticalDepth: number;
@@ -24,6 +25,7 @@ const STORAGE_KEY = "nexa_evolution_matrix_v1";
 const DEFAULT_EVOLUTION_STATE: EvolutionMetric = {
   epoch: 4,
   generation: 42,
+  totalInteractionSamples: 1420,
   accuracyScore: 99.4,
   reasoningLatencyAvgMs: 340,
   adaptiveWeight: 1.28,

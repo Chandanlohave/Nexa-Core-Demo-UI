@@ -4,10 +4,25 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="data:image/svg+xml,%3csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='512' height='512' fill='black'/%3e%3cpath d='M120 80V432H190L340 190V432H410V80H340L190 322V80H120Z' fill='%2329DFFF' stroke='%2329DFFF' stroke-width='10' stroke-linejoin='round'/%3e%3c/svg%3e" />
-    <!-- VIEWPORT FIX FOR IPHONE NOTCH AND SCALING -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- VIEWPORT FIX FOR ANDROID AND IPHONE NOTCH & DYNAMIC ADDRESS BAR SCALING -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="NEXA AI Assistant" />
+    
+    <script>
+      (function() {
+        function updateAppViewportHeight() {
+          var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+          document.documentElement.style.setProperty('--app-dvh', vh + 'px');
+        }
+        updateAppViewportHeight();
+        window.addEventListener('resize', updateAppViewportHeight, { passive: true });
+        window.addEventListener('orientationchange', updateAppViewportHeight, { passive: true });
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', updateAppViewportHeight, { passive: true });
+        }
+      })();
+    </script>
     
     <!-- IOS PWA SETTINGS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -68,16 +83,23 @@
     <style>
       :root {
         --nexa-primary: 41 223 255; /* Default Cyan RGB */
+        --app-dvh: 100dvh;
       }
       /* MOBILE VIEWPORT FIXES using dvh (Dynamic Viewport Height) */
       html {
+        height: 100%;
         height: 100dvh;
-        width: 100vw;
+        height: var(--app-dvh, 100dvh);
+        width: 100%;
+        max-width: 100vw;
         overflow: hidden;
       }
       body { 
+        height: 100%;
         height: 100dvh; 
-        width: 100vw;
+        height: var(--app-dvh, 100dvh);
+        width: 100%;
+        max-width: 100vw;
         margin: 0; 
         padding: 0; 
         background: #000; 
@@ -85,11 +107,17 @@
         overflow: hidden; 
         overscroll-behavior: none; 
         position: fixed; 
+        inset: 0;
       }
       #root {
         height: 100%;
+        height: 100dvh;
+        height: var(--app-dvh, 100dvh);
         width: 100%;
+        max-width: 100vw;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
       
       /* LIGHT MODE OVERRIDES */

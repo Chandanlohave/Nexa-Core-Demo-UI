@@ -115,8 +115,15 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
       <div className="relative w-[96%] max-w-5xl max-h-[94vh] bg-slate-950/90 border border-cyan-500/30 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.15)] overflow-hidden flex flex-col text-slate-100">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-5 gap-3 border-b border-cyan-500/20 bg-slate-900/50">
-          <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-5 gap-3 border-b border-cyan-500/20 bg-slate-900/50 relative">
+          <button 
+            onClick={onClose} 
+            className="sm:hidden absolute top-3.5 right-3.5 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-2.5 sm:gap-3 pr-8 sm:pr-0">
             <div className="p-2 sm:p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Cpu className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
             </div>
@@ -135,8 +142,8 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-start sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
+            <div className="flex items-center gap-2 min-w-max">
               {onOpenPipeline && (
                 <button
                   onClick={onOpenPipeline}
@@ -213,15 +220,14 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
           )}
 
           {/* 6 Agent Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {NEXA_SQUAD_AGENTS.map((agent) => {
               const isHighlight = activeHighlightAgentId === agent.id;
               const isSinglePlaying = playingSingleAgentId === agent.id;
-
               return (
                 <div
                   key={agent.id}
-                  className={`relative flex flex-col justify-between p-5 rounded-xl border transition-all duration-300 bg-slate-900/60 ${
+                  className={`relative flex flex-col justify-between p-3.5 sm:p-5 rounded-xl border transition-all duration-300 bg-slate-900/60 ${
                     isHighlight || isSinglePlaying
                       ? 'border-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.3)] bg-slate-900/90 scale-[1.02]'
                       : 'border-slate-800 hover:border-slate-700 hover:bg-slate-900/80'
@@ -233,26 +239,26 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
                 >
                   <div>
                     {/* Top Status & Name */}
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/50">
+                    <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+                      <div className="flex items-center gap-2 sm:gap-2.5">
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50">
                           {getAgentIcon(agent.id)}
                         </div>
                         <div>
                           <h3 
-                            className="font-mono font-bold text-base tracking-wider uppercase"
+                            className="font-mono font-bold text-sm sm:text-base tracking-wider uppercase leading-tight"
                             style={{ color: agent.color }}
                           >
                             {agent.name}
                           </h3>
-                          <div className="text-xs text-slate-400 font-medium">
+                          <div className="text-[10px] sm:text-xs text-slate-400 font-medium leading-none mt-1">
                             {agent.role}
                           </div>
                         </div>
                       </div>
 
                       <span 
-                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold"
+                        className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-semibold shrink-0"
                         style={{ 
                           backgroundColor: `${agent.color}15`, 
                           color: agent.color,
@@ -265,22 +271,22 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
                     </div>
 
                     {/* Specialty & Metrics */}
-                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                    <p className="text-[11px] sm:text-xs text-slate-300 leading-snug sm:leading-relaxed mb-2 sm:mb-3 line-clamp-2 sm:line-clamp-none">
                       {agent.specialty}
                     </p>
 
-                    <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-1 font-mono text-[11px] mb-4">
+                    <div className="p-1.5 sm:p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-0.5 sm:space-y-1 font-mono text-[9px] sm:text-[11px] mb-2 sm:mb-4">
                       <div className="text-slate-400 flex items-center justify-between">
                         <span>STATUS:</span>
                         <span className="text-emerald-400 font-semibold">{agent.status}</span>
                       </div>
-                      <div className="text-slate-400 flex items-center justify-between">
+                      <div className="text-slate-400 flex items-center justify-between hidden sm:flex">
                         <span>METRIC:</span>
-                        <span className="text-slate-200">{agent.metric}</span>
+                        <span className="text-slate-200 truncate ml-2">{agent.metric}</span>
                       </div>
                       <div className="text-slate-400 flex items-center justify-between">
                         <span>VOICE:</span>
-                        <span style={{ color: agent.color }}>
+                        <span style={{ color: agent.color }} className="truncate ml-2">
                           {agent.voice} ({agent.voiceGender})
                         </span>
                       </div>
@@ -288,29 +294,28 @@ export const SquadPanel: React.FC<SquadPanelProps> = ({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                  <div className="flex items-center gap-1.5 sm:gap-2 pt-2 border-t border-slate-800/80">
                     <button
                       onClick={() => handlePlaySingleAgent(agent)}
                       disabled={isPlayingSequence}
-                      className="flex-1 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      className="flex-1 py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       {isSinglePlaying ? (
                         <>
-                          <Activity className="w-3.5 h-3.5 text-cyan-400 animate-spin" /> Speaking...
+                          <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400 animate-spin" /> <span className="hidden sm:inline">Speaking...</span>
                         </>
                       ) : (
                         <>
-                          <Play className="w-3.5 h-3.5" /> Hear Intro
+                          <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Hear Intro</span><span className="sm:hidden">Intro</span>
                         </>
                       )}
                     </button>
-
                     <button
                       onClick={() => {
                         onRunAgentTask(agent.name, getAgentTaskPrompt(agent.id));
                         onClose();
                       }}
-                      className="flex-1 py-2 px-3 rounded-lg font-mono text-xs font-bold text-slate-950 flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer hover:brightness-110"
+                      className="flex-1 py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg font-mono text-[10px] sm:text-xs font-bold text-slate-950 flex items-center justify-center gap-1 sm:gap-1.5 shadow-md transition-all cursor-pointer hover:brightness-110"
                       style={{ backgroundColor: agent.color }}
                     >
                       <Zap className="w-3.5 h-3.5 fill-current" /> Run Task
