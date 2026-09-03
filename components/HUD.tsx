@@ -34,7 +34,9 @@ const ClassicHUD: React.FC<{
   audioRef?: React.MutableRefObject<{ vol: number, bass: number, mid: number, treble: number } | null>;
   accentColor?: string;
   ecoMode?: boolean;
-}> = React.memo(({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false }) => {
+  gestureData?: GestureData;
+  onResetZoom?: () => void;
+}> = React.memo(({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false, gestureData, onResetZoom }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -49,6 +51,67 @@ const ClassicHUD: React.FC<{
   const matrixDropsRef = useRef<number[]>([]);
   
   const smoothedAudioRef = useRef({ vol: 0, bass: 0, mid: 0, treble: 0 });
+
+  // Real-time Gesture tracking refs
+  const gestureDataRef = useRef<GestureData | undefined>(gestureData);
+  useEffect(() => {
+    gestureDataRef.current = gestureData;
+  }, [gestureData]);
+
+  const gestureScaleRef = useRef<number>(1.0);
+  const targetScaleRef = useRef<number>(1.0);
+  const gestureTiltRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const targetTiltRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchStartRef = useRef<{ x: number; y: number; dist: number } | null>(null);
+  const touchRotRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    if ('touches' in e) {
+      if (e.touches.length === 1) {
+        touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dist: 0 };
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        touchStartRef.current = { x: 0, y: 0, dist: Math.hypot(dx, dy) };
+      }
+    } else {
+      touchStartRef.current = { x: e.clientX, y: e.clientY, dist: 0 };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!touchStartRef.current) return;
+    if ('touches' in e) {
+      if (e.touches.length === 1) {
+        const dx = e.touches[0].clientX - touchStartRef.current.x;
+        const dy = e.touches[0].clientY - touchStartRef.current.y;
+        touchRotRef.current.y += dx * 0.006;
+        touchRotRef.current.x += dy * 0.005;
+        touchStartRef.current.x = e.touches[0].clientX;
+        touchStartRef.current.y = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const currentDist = Math.hypot(dx, dy);
+        if (touchStartRef.current.dist > 0) {
+          const factor = currentDist / touchStartRef.current.dist;
+          targetScaleRef.current = Math.max(0.4, Math.min(2.5, targetScaleRef.current * factor));
+        }
+        touchStartRef.current.dist = currentDist;
+      }
+    } else if (e.buttons === 1) {
+      const dx = e.clientX - touchStartRef.current.x;
+      const dy = e.clientY - touchStartRef.current.y;
+      touchRotRef.current.y += dx * 0.006;
+      touchRotRef.current.x += dy * 0.005;
+      touchStartRef.current.x = e.clientX;
+      touchStartRef.current.y = e.clientY;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -196,8 +259,28 @@ const ClassicHUD: React.FC<{
       const width = canvas.width / (window.devicePixelRatio || 1);
       const height = canvas.height / (window.devicePixelRatio || 1);
       
-      // Dynamic baseRadius = Math.min(width, height) * 0.22
-      const baseRadius = Math.min(width, height) * 0.22;
+      // Air Gesture Processing (Touch-free 3D Scaling & Air Tilt)
+      const gd = gestureDataRef.current;
+      if (gd && gd.handDetected) {
+          targetScaleRef.current = Math.max(0.35, Math.min(2.5, gd.scale || 1.0));
+          targetTiltRef.current.x = gd.handPosition ? gd.handPosition.x : 0;
+          targetTiltRef.current.y = gd.handPosition ? gd.handPosition.y : 0;
+      } else {
+          targetScaleRef.current = 1.0;
+          targetTiltRef.current.x = 0;
+          targetTiltRef.current.y = 0;
+      }
+
+      // Smooth scale & tilt interpolation with timeScale
+      const scaleSpeed = Math.min(1, 0.16 * timeScale);
+      const tiltSpeed = Math.min(1, 0.16 * timeScale);
+      gestureScaleRef.current += (targetScaleRef.current - gestureScaleRef.current) * scaleSpeed;
+      gestureTiltRef.current.x += (targetTiltRef.current.x - gestureTiltRef.current.x) * tiltSpeed;
+      gestureTiltRef.current.y += (targetTiltRef.current.y - gestureTiltRef.current.y) * tiltSpeed;
+
+      const currentScale = gestureScaleRef.current;
+      // Dynamic baseRadius dynamically driven by hand gestures
+      const baseRadius = Math.min(width, height) * 0.22 * currentScale;
 
       // CLEAN CLEAR for non-coding states
       if (state !== HUDState.CODING) {
@@ -340,8 +423,11 @@ const ClassicHUD: React.FC<{
       // Particle bloom layering: 'lighter' for glowing bloom in dark mode, 'source-over' in light mode for crisp dots
       ctx.globalCompositeOperation = isDarkMode ? 'lighter' : 'source-over';
       
-      const angleY = rotationRef.current.y;
-      const angleX = rotationRef.current.x;
+      // Combine continuous auto-rotation with touch drag & hand gesture air tilt
+      const handTiltY = gestureTiltRef.current.x * 0.85;
+      const handTiltX = gestureTiltRef.current.y * 0.75;
+      const angleY = rotationRef.current.y + touchRotRef.current.y + handTiltY;
+      const angleX = rotationRef.current.x + touchRotRef.current.x + handTiltX;
 
       particlesRef.current.forEach((p, i) => {
         // Individual pulse: Math.sin(time * 0.002 + randomPhase) * 5
@@ -367,19 +453,15 @@ const ClassicHUD: React.FC<{
         const y2 = rotY * Math.cos(angleX) - rotZ * Math.sin(angleX);
         const z2 = rotY * Math.sin(angleX) + rotZ * Math.cos(angleX);
         
-        // Perspective 2D Projection:
-        // scale = 300 / (300 + z2)
-        // alpha = scale * scale * brightness
-        // ScreenX = (width / 2) + rotX * scale + glitchOffsetX
-        // ScreenY = (height / 2) + y2 * scale + glitchOffsetY
-        // ParticleRadius = p.size * scale
-        const scale = 300 / (300 + z2);
+        // Dynamic Perspective 2D Projection adapted for real-time scale
+        const focalDist = 300 * Math.max(0.8, Math.min(2.2, currentScale));
+        const scale = focalDist / (focalDist + z2);
         const blink = Math.sin(time * 0.005 + p.blinkOffset);
         const brightness = 0.6 + blink * 0.4 + (vol * 1.5);
         const alpha = scale * scale * brightness;
         const screenX = (width / 2) + rotX * scale + glitchOffsetX;
         const screenY = (height / 2) + y2 * scale + glitchOffsetY;
-        const particleRadius = Math.max(0.3, p.size * scale);
+        const particleRadius = Math.max(0.35, p.size * scale * Math.sqrt(Math.max(0.4, currentScale)));
         
         ctx.beginPath();
         ctx.arc(screenX, screenY, particleRadius, 0, Math.PI * 2);
@@ -393,6 +475,18 @@ const ClassicHUD: React.FC<{
         ctx.globalAlpha = Math.min(1, Math.max(0.06, alpha * (isDarkMode ? 1.0 : 0.85)));
         ctx.fill();
       });
+
+      // Holographic air-gesture indicator ring when active
+      if (gd && gd.handDetected && Math.abs(currentScale - 1.0) > 0.04) {
+        ctx.save();
+        ctx.strokeStyle = gd.gesture === 'PINCH' ? 'rgba(56, 189, 248, 0.45)' : 'rgba(41, 223, 255, 0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(width / 2 + glitchOffsetX, height / 2 + glitchOffsetY, baseRadius * 1.25, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Reset layer composition to 'source-over' for typography
       ctx.globalCompositeOperation = 'source-over';
@@ -469,7 +563,17 @@ const ClassicHUD: React.FC<{
   }, [state, rotationSpeed, accentColor, ecoMode]); 
 
   return (
-    <div ref={containerRef} className="w-full h-full flex items-center justify-center overflow-hidden min-h-0">
+    <div 
+      ref={containerRef} 
+      className="w-full h-full flex items-center justify-center overflow-hidden min-h-0 pointer-events-auto touch-none cursor-grab active:cursor-grabbing"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleTouchStart}
+      onMouseMove={handleTouchMove}
+      onMouseUp={handleTouchEnd}
+      onMouseLeave={handleTouchEnd}
+    >
         <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
@@ -513,6 +617,8 @@ const HUD: React.FC<HUDProps> = React.memo(({
       audioRef={audioRef}
       accentColor={accentColor}
       ecoMode={ecoMode}
+      gestureData={gestureData}
+      onResetZoom={onResetZoom}
     />
   );
 });

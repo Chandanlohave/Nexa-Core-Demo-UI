@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
-import NebulaOrb from './components/NebulaOrb';
 import { AgentVirtualOffice } from './components/AgentVirtualOffice';
 import ChatPanel from './components/ChatPanel';
 import AdminPanel from './components/AdminPanel';
@@ -864,28 +863,19 @@ const App: React.FC = () => {
                     />
                     
                     <div className="flex-1 relative min-h-0 w-full flex items-center justify-center pointer-events-none">
-                        <div className="w-full h-full pointer-events-none">
-                            {config.hudMode === 'classic' ? (
-                                <HUD 
-                                    state={hudState} 
-                                    rotationSpeed={config.hudRotationSpeed} 
-                                    audioRef={audioRef} 
-                                    accentColor={config.accentColor} 
-                                    ecoMode={config.ecoMode} 
-                                    gestureData={gestureData}
-                                    visualMode="CLASSIC"
-                                    activeHighlightAgentId={activeHighlightAgentId}
-                                    customAgents={customAgents}
-                                    onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
-                                />
-                            ) : (
-                                <NebulaOrb 
-                                    state={hudState} 
-                                    audioRef={audioRef} 
-                                    customAgents={customAgents}
-                                    activeHighlightAgentId={activeHighlightAgentId}
-                                />
-                            )}
+                        <div className="w-full h-full pointer-events-auto">
+                            <HUD 
+                                state={hudState} 
+                                rotationSpeed={config.hudRotationSpeed} 
+                                audioRef={audioRef} 
+                                accentColor={config.accentColor} 
+                                ecoMode={config.ecoMode} 
+                                gestureData={gestureData}
+                                visualMode={config.hudMode === 'classic' ? 'CLASSIC' : 'NEBULA'}
+                                activeHighlightAgentId={activeHighlightAgentId}
+                                customAgents={customAgents}
+                                onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
+                            />
                         </div>
 
                         {/* Top-Right Air Gesture Sensor Switch */}
