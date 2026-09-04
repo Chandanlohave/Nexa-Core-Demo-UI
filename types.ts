@@ -71,6 +71,8 @@ export interface UserProfile {
   voiceEnrolledAt?: number;
   lastLoginDate?: string;
   accessKey?: string;
+  customApiKey?: string;
+  groqKey?: string;
 }
 
 export interface AccessKeyDefinition {

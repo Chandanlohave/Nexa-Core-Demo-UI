@@ -501,7 +501,19 @@ const App: React.FC = () => {
     useEffect(() => {
         const storedUser = localStorage.getItem('nexa_user');
         if (storedUser) {
-            setUser(JSON.parse(storedUser));
+            try {
+                const parsed = JSON.parse(storedUser);
+                const clientKey = localStorage.getItem('nexa_client_api_key');
+                // Regular users can NEVER use app without their own API key
+                if (parsed.role !== UserRole.ADMIN && (!clientKey || clientKey.trim().length < 10)) {
+                    localStorage.removeItem('nexa_user');
+                    setUser(null);
+                } else {
+                    setUser(parsed);
+                }
+            } catch (e) {
+                setUser(null);
+            }
         }
         fetchSystemConfig();
     }, []);

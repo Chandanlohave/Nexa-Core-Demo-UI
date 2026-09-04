@@ -5,6 +5,7 @@ import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSou
 import InstallPWAButton from './InstallPWAButton';
 import { syncUserProfile, getUserProfile, fetchSystemConfig, verifyAdminPassword, verifyMasterAccessKey, createCustomAccessKey } from '../services/memoryService';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, onAuthChange } from '../services/firebaseConfig';
+import { testGeminiApiKey, testGroqApiKey } from '../services/geminiService';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
@@ -85,10 +86,18 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('INIT');
   const [showManual, setShowManual] = useState(false);
+  const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
+  const [testStatus, setTestStatus] = useState<{ gemini?: string; groq?: string }>({});
+  const [isTesting, setIsTesting] = useState(false);
   
-  // Helper to safely get stored keys
+  // Helpers to safely get stored keys
   const getStoredKey = () => {
       try { return localStorage.getItem('nexa_client_api_key') || ''; } 
+      catch (e) { return ''; }
+  };
+
+  const getStoredGroqKey = () => {
+      try { return localStorage.getItem('nexa_client_groq_key') || ''; }
       catch (e) { return ''; }
   };
 
@@ -107,6 +116,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     gender: 'male',
     password: '',
     customApiKey: getStoredKey(),
+    customGroqKey: getStoredGroqKey(),
     accessKey: getStoredAccessKey() // Pre-fill Access Key from LocalStorage
   });
 
@@ -331,31 +341,90 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     completeLogin(profile);
   };
 
+  const handleTestGeminiKey = async () => {
+    setIsTesting(true);
+    setError('');
+    const res = await testGeminiApiKey(formData.customApiKey);
+    setIsTesting(false);
+    if (res.success) {
+      setTestStatus(prev => ({ ...prev, gemini: 'ONLINE ✓ (Gemini 3.7 Flash Active)' }));
+    } else {
+      setTestStatus(prev => ({ ...prev, gemini: `FAILED: ${res.message}` }));
+      playErrorSound();
+    }
+  };
+
+  const handleTestGroqKey = async () => {
+    if (!formData.customGroqKey || formData.customGroqKey.trim().length < 10) {
+      setError('// Groq API Key required for testing');
+      return;
+    }
+    setIsTesting(true);
+    setError('');
+    const res = await testGroqApiKey(formData.customGroqKey);
+    setIsTesting(false);
+    if (res.success) {
+      setTestStatus(prev => ({ ...prev, groq: 'ONLINE ✓ (Groq Llama 3.3 / DeepSeek Fallback Ready)' }));
+    } else {
+      setTestStatus(prev => ({ ...prev, groq: `FAILED: ${res.message}` }));
+      playErrorSound();
+    }
+  };
+
   const saveCustomKey = () => {
     if (formData.customApiKey.trim().length < 10) {
         playErrorSound();
-        setError('// ERROR: INVALID API KEY FORMAT');
+        setError('// ERROR: GEMINI API KEY REQUIRED (Bina key ke login nahi ho sakta)');
         return;
     }
     try {
         localStorage.setItem('nexa_client_api_key', formData.customApiKey.trim());
+        if (formData.customGroqKey && formData.customGroqKey.trim().length > 10) {
+            localStorage.setItem('nexa_client_groq_key', formData.customGroqKey.trim());
+        }
     } catch(e) { console.warn("Storage blocked"); }
     
-    setInitStatusText('KEY SAVED. INITIALIZING...');
+    setInitStatusText('KEYS SAVED. INITIALIZING...');
     setLoading(true);
     setTimeout(() => {
         setLoading(false);
-        setMode('USER_CREATE');
+        if (pendingProfile) {
+            const prof = {
+                ...pendingProfile,
+                customApiKey: formData.customApiKey.trim(),
+                groqKey: formData.customGroqKey?.trim() || undefined
+            };
+            setPendingProfile(null);
+            completeLogin(prof);
+        } else {
+            setMode('USER_CREATE');
+        }
     }, 1000);
   };
   
   const clearCustomKey = () => {
-      try { localStorage.removeItem('nexa_client_api_key'); } catch(e) {}
-      setFormData({...formData, customApiKey: ''});
-      setError('// KEY REMOVED FROM DEVICE');
+      try { 
+          localStorage.removeItem('nexa_client_api_key'); 
+          localStorage.removeItem('nexa_client_groq_key');
+      } catch(e) {}
+      setFormData({...formData, customApiKey: '', customGroqKey: ''});
+      setTestStatus({});
+      setError('// ALL API KEYS REMOVED FROM DEVICE');
   };
 
   const completeLogin = (profile: UserProfile) => {
+    // STRICT USER POLICY: Regular users CANNOT log in without their own Gemini API key
+    if (profile.role !== UserRole.ADMIN) {
+        const storedKey = getStoredKey();
+        if (!storedKey || storedKey.trim().length < 10) {
+            playErrorSound();
+            setError('// MANDATORY: User accounts require your own Gemini API Key. Bina API key ke login possible nahi hai.');
+            setPendingProfile(profile);
+            setMode('KEY_INPUT');
+            setLoading(false);
+            return;
+        }
+    }
     setLoading(true);
     profile.role === UserRole.ADMIN ? playAdminLoginSound() : playUserLoginSound();
     onLogin(profile);
@@ -444,6 +513,37 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               {mode === 'USER_CREATE' && (
                 <div className="animate-slide-up space-y-3">
                   <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-2">IDENTIFY YOURSELF</div></div>
+
+                  {/* API Key Status Bar */}
+                  <div className="p-2.5 rounded bg-zinc-900/80 border border-zinc-800 text-[10px] font-mono space-y-1.5 shadow-inner">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Gemini Key:</span>
+                      {hasCustomKey ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> CONFIGURED ✓
+                        </span>
+                      ) : (
+                        <span className="text-red-400 font-semibold">REQUIRED (NOT SET)</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Groq Fallback:</span>
+                      {formData.customGroqKey && formData.customGroqKey.trim().length > 10 ? (
+                        <span className="text-nexa-cyan font-semibold">READY (Llama/DeepSeek) ✓</span>
+                      ) : (
+                        <span className="text-zinc-500">OPTIONAL</span>
+                      )}
+                    </div>
+                    <div className="pt-1 text-right border-t border-zinc-800/80">
+                      <button 
+                        type="button" 
+                        onClick={() => setMode('KEY_INPUT')} 
+                        className="text-[9px] text-nexa-cyan hover:underline tracking-wider"
+                      >
+                        ⚙️ CONFIGURE API KEYS
+                      </button>
+                    </div>
+                  </div>
                   
                   {/* Google Sign-In with Firebase */}
                   <button
@@ -563,57 +663,133 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
               {mode === 'KEY_INPUT' && (
                 <div className="animate-slide-up space-y-4">
-                  {/* Red Warning Box for Key Input */}
-                  <div className="mb-2 border-l-4 border-red-900/50 bg-red-900/10 p-2">
-                      <div className="text-[10px] text-red-500 font-mono tracking-widest uppercase">
-                          // SYSTEM HALTED: PERSONAL API KEY REQUIRED
+                  {/* Warning Box for Key Input */}
+                  <div className="border-l-4 border-amber-500/80 bg-amber-950/20 p-2.5 rounded-r">
+                      <div className="text-[10px] text-amber-400 font-mono tracking-widest font-semibold uppercase">
+                          // PERSONAL API KEY REQUIRED
                       </div>
+                      <p className="text-[9px] text-zinc-400 font-mono mt-0.5 leading-relaxed">
+                          Admin keys are restricted. All users must configure their own personal API key. Groq provides automatic failover if Gemini is down.
+                      </p>
                   </div>
 
-                  <div className="text-center"><div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2 py-1 mb-2">ACCESS OVERRIDE</div></div>
-                  
-                  <p className="text-zinc-400 text-[10px] text-center font-mono leading-relaxed">
-                      Security Protocol Active. You must provide your own Google Gemini API Key to operate NEXA on this device.
-                  </p>
+                  <div className="text-center">
+                    <div className="text-nexa-cyan text-xs font-mono border border-nexa-cyan/30 inline-block px-2.5 py-1">
+                      API KEY SETUP
+                    </div>
+                  </div>
 
-                  <BracketInput name="customApiKey" placeholder="PASTE_API_KEY_HERE" value={formData.customApiKey} onChange={handleChange} autoFocus />
-                  
-                  <div className="flex flex-col gap-2 pt-2">
-                      <div className="flex gap-2">
-                          {hasCustomKey && (
-                              <CyberButton onClick={clearCustomKey} label="CLEAR" secondary={true} />
-                          )}
-                          <CyberButton onClick={saveCustomKey} label="ACTIVATE SYSTEM" />
-                      </div>
-                      
-                      <div className="border-t border-zinc-700/50 my-2"></div>
+                  {/* Test Feedback */}
+                  {(testStatus.gemini || testStatus.groq) && (
+                    <div className="p-2 bg-zinc-900 border border-zinc-700 rounded text-[10px] font-mono space-y-1">
+                      {testStatus.gemini && (
+                        <div className={testStatus.gemini.includes('ONLINE') ? 'text-emerald-400' : 'text-red-400'}>
+                          Gemini: {testStatus.gemini}
+                        </div>
+                      )}
+                      {testStatus.groq && (
+                        <div className={testStatus.groq.includes('ONLINE') ? 'text-emerald-400' : 'text-red-400'}>
+                          Groq: {testStatus.groq}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
+                  {/* 1. GEMINI API KEY (REQUIRED) */}
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-white font-bold tracking-wider flex items-center gap-1">
+                        1. GOOGLE GEMINI KEY <span className="text-red-400">*</span>
+                      </span>
                       <a 
-                          href="https://aistudio.google.com/app/apikey" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="w-full py-3 bg-zinc-900 border border-dashed border-zinc-600 hover:border-nexa-cyan text-zinc-300 hover:text-white text-[10px] font-mono tracking-widest uppercase text-center transition-all flex items-center justify-center gap-2 group rounded hover:bg-zinc-800"
+                        href="https://aistudio.google.com/app/apikey" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-nexa-cyan hover:underline tracking-wider"
                       >
-                          <span>GET FREE API KEY</span>
-                          <svg className="w-3 h-3 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        [GET FREE KEY ↗]
                       </a>
-                      
+                    </div>
+                    <BracketInput 
+                      name="customApiKey" 
+                      placeholder="AIzaSy... (Gemini API Key)" 
+                      value={formData.customApiKey} 
+                      onChange={handleChange} 
+                      autoFocus 
+                    />
+                    <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 pt-0.5">
+                      <span>Powers main intelligence & live voice</span>
+                      <button 
+                        type="button" 
+                        onClick={handleTestGeminiKey}
+                        disabled={isTesting || !formData.customApiKey}
+                        className="text-nexa-cyan/80 hover:text-nexa-cyan disabled:opacity-40 hover:underline"
+                      >
+                        {isTesting ? 'TESTING...' : '⚡ TEST GEMINI'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. GROQ API KEY (OPTIONAL FALLBACK) */}
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-zinc-300 font-bold tracking-wider flex items-center gap-1">
+                        2. GROQ FALLBACK KEY <span className="text-zinc-500 text-[9px] font-normal">(OPTIONAL)</span>
+                      </span>
+                      <a 
+                        href="https://console.groq.com/keys" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-amber-400 hover:underline tracking-wider"
+                      >
+                        [GET FREE GROQ ↗]
+                      </a>
+                    </div>
+                    <BracketInput 
+                      name="customGroqKey" 
+                      placeholder="gsk_... (Groq Fallback Key)" 
+                      value={formData.customGroqKey} 
+                      onChange={handleChange} 
+                    />
+                    <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 pt-0.5">
+                      <span>Automatic fallback if Gemini is down</span>
+                      <button 
+                        type="button" 
+                        onClick={handleTestGroqKey}
+                        disabled={isTesting || !formData.customGroqKey}
+                        className="text-amber-400/80 hover:text-amber-400 disabled:opacity-40 hover:underline"
+                      >
+                        {isTesting ? 'TESTING...' : '⚡ TEST GROQ'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-1">
+                      <div className="flex gap-2">
+                          {(hasCustomKey || formData.customGroqKey) && (
+                              <CyberButton onClick={clearCustomKey} label="CLEAR KEYS" secondary={true} />
+                          )}
+                          <CyberButton onClick={saveCustomKey} label="SAVE & PROCEED" />
+                      </div>
+
                       <button 
                           onClick={() => setShowManual(!showManual)}
-                          className="w-full py-2 text-[10px] text-nexa-cyan/80 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/20 transition-all font-mono tracking-widest uppercase bg-transparent hover:bg-nexa-cyan/5 rounded"
+                          className="w-full py-1.5 text-[10px] text-nexa-cyan/80 hover:text-nexa-cyan border border-transparent hover:border-nexa-cyan/20 transition-all font-mono tracking-widest uppercase bg-transparent hover:bg-nexa-cyan/5 rounded"
                       >
-                          {showManual ? "HIDE MANUAL [-]" : "HOW TO CREATE KEY? [+]"}
+                          {showManual ? "HIDE GUIDE [-]" : "HOW TO GET FREE KEYS? [+]"}
                       </button>
                       
                       {showManual && (
                           <div className="bg-zinc-900 border border-nexa-cyan/30 p-3 text-[10px] text-zinc-300 font-mono text-left space-y-2 animate-slide-up rounded shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-                              <p className="text-nexa-cyan border-b border-nexa-cyan/20 pb-1 mb-2 font-bold">QUICK GUIDE:</p>
-                              <p>1. Open <span className="text-white">Google AI Studio</span> (Link above).</p>
-                              <p>2. Sign in with Google Account.</p>
-                              <p>3. Click "Create API Key" (Blue Button).</p>
-                              <p>4. Select "Create key in new project".</p>
-                              <p>5. Copy the key string (starts with AIza...).</p>
-                              <p>6. Paste above and click ACTIVATE.</p>
+                              <p className="text-nexa-cyan border-b border-nexa-cyan/20 pb-1 font-bold">1. GOOGLE GEMINI KEY:</p>
+                              <p>• Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-white underline">aistudio.google.com</a></p>
+                              <p>• Sign in with Google & click "Create API key".</p>
+                              <p>• Copy and paste into the Gemini field above.</p>
+
+                              <p className="text-amber-400 border-b border-amber-400/20 pb-1 pt-1 font-bold">2. GROQ FALLBACK KEY (Optional):</p>
+                              <p>• Visit <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-white underline">console.groq.com/keys</a></p>
+                              <p>• Sign up free & click "Create API Key".</p>
+                              <p>• Paste above for ultra-fast Llama 3.3 / DeepSeek failover when Gemini has outages.</p>
                           </div>
                       )}
                   </div>

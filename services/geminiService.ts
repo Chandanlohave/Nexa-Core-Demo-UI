@@ -149,22 +149,25 @@ export const getEnvApiKey = (): string | null => {
 };
 
 export const getSecureApiKey = async (): Promise<string> => {
+  // If user stored their own custom client key, prioritize it
   const customKey = localStorage.getItem('nexa_client_api_key');
   if (customKey && customKey.trim().length > 10) return customKey.trim();
 
-  let canUseSystemKeys = false;
+  // STRICT USER POLICY: Regular users can NEVER use environment or Admin keys!
+  let isAdmin = false;
   try {
       const userStr = localStorage.getItem('nexa_user');
       if (userStr) {
           const user = JSON.parse(userStr);
-          if (user.role === UserRole.ADMIN || isUserBhabhi(user)) {
-              canUseSystemKeys = true;
+          if (user.role === UserRole.ADMIN) {
+              isAdmin = true;
           }
       }
   } catch(e) {}
 
-  if (!canUseSystemKeys) throw new Error("USER_API_KEY_REQUIRED");
+  if (!isAdmin) throw new Error("USER_API_KEY_REQUIRED");
 
+  // Admin flow: check system config, then env key
   try {
       const sysConfig = await fetchSystemConfig();
       if (sysConfig && sysConfig.geminiKey && sysConfig.geminiKey.trim().length > 10) return sysConfig.geminiKey.trim();
@@ -185,12 +188,12 @@ export const testGeminiApiKey = async (testKey?: string): Promise<{ success: boo
             config: { maxOutputTokens: 5 }
         });
         if (res && (res.text || res.candidates)) {
-            return { success: true, message: "API Key Verified & Active! (Gemini 3.7 Flash Online)" };
+            return { success: true, message: "Gemini API Key Verified & Active! (Gemini 3.7 Flash Online)" };
         }
-        return { success: true, message: "API Key Connected Successfully!" };
+        return { success: true, message: "Gemini API Key Connected Successfully!" };
     } catch (e: any) {
         console.error("API Key validation error:", e);
-        return { success: false, message: e.message || "Invalid or Unreachable API Key." };
+        return { success: false, message: e.message || "Invalid or Unreachable Gemini API Key." };
     }
 };
 
@@ -204,10 +207,47 @@ export const getKimiKey = async (): Promise<string | null> => {
 
 // --- HELPER FOR GROQ KEY ---
 export const getGroqKey = async (): Promise<string | null> => {
+    // 1. Check user-provided Groq key first (client storage)
     try {
-        const sys = await fetchSystemConfig();
-        return sys?.groqKey && sys.groqKey.trim().length > 10 ? sys.groqKey : null;
-    } catch(e) { return null; }
+        const clientGroqKey = localStorage.getItem('nexa_client_groq_key');
+        if (clientGroqKey && clientGroqKey.trim().length > 10) return clientGroqKey.trim();
+    } catch(e) {}
+
+    // 2. Admin fallback - ONLY for Admin role
+    try {
+        const userStr = localStorage.getItem('nexa_user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user.role === UserRole.ADMIN) {
+                const sys = await fetchSystemConfig();
+                return sys?.groqKey && sys.groqKey.trim().length > 10 ? sys.groqKey.trim() : null;
+            }
+        }
+    } catch(e) {}
+
+    return null;
+};
+
+export const testGroqApiKey = async (testKey?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+        const keyToTest = (testKey && testKey.trim().length > 10) ? testKey.trim() : await getGroqKey();
+        if (!keyToTest) return { success: false, message: "No Groq API Key provided." };
+        const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${keyToTest}` },
+            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: 'hello' }], max_tokens: 5 })
+        });
+        const data = await res.json();
+        if (data.choices && data.choices.length > 0) {
+            return { success: true, message: "Groq Key Verified & Active! (Fallback Engine Online: Llama 3.3 70B / DeepSeek)" };
+        }
+        if (data.error) {
+            return { success: false, message: data.error.message || "Invalid Groq API Key." };
+        }
+        return { success: true, message: "Groq Connected Successfully!" };
+    } catch (e: any) {
+        return { success: false, message: e.message || "Failed to reach Groq API." };
+    }
 };
 
 export const getFormattedTimeContext = (): string => {
@@ -659,7 +699,23 @@ export const generateTextResponse = async (inputText: string, user: UserProfile,
         }
     }
 
-    let apiKey = await getSecureApiKey();
+    let apiKey = '';
+    try {
+        apiKey = await getSecureApiKey();
+    } catch(keyErr: any) {
+        const groqKey = await getGroqKey();
+        if (groqKey) {
+            try {
+                let groqRes = await callOpenAICompatible(groqKey, GROQ_BASE_URL, "llama-3.3-70b-versatile", inputText, "You are NEXA, an AI assistant. Speak in sweet Hinglish/Hindi.");
+                if (!groqRes) groqRes = await callOpenAICompatible(groqKey, GROQ_BASE_URL, DEEPSEEK_MODEL, inputText, "You are NEXA, an AI assistant. Speak in sweet Hinglish/Hindi.");
+                if (groqRes) {
+                    let cleanText = groqRes.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                    return { text: forceFemaleHindi(cleanText || groqRes), action: 'NONE' };
+                }
+            } catch(e) {}
+        }
+        return { text: "Personal Gemini API Key required hai. Kripya login screen ya settings mein apni Gemini API Key enter karein.", action: 'NONE' };
+    }
     const envKey = getEnvApiKey();
     const rigidIntro = getRigidIntro(user);
     const facts = getFacts(user).map(f => f.content).join("; ");
@@ -835,6 +891,24 @@ export const generateTextResponse = async (inputText: string, user: UserProfile,
             // Check specifically for Safety Block or Vision Fail
             if (e.toString().includes('Safety') || e.toString().includes('blocked')) {
                 return { text: "Mujhe is image ya text mein kuch unsafe laga, isliye main jawab nahi de sakti.", action: 'NONE' };
+            }
+
+            // Fallback to Groq if Gemini is down or errors
+            const groqKey = await getGroqKey();
+            if (groqKey && (!file || file.type !== 'image')) {
+                try {
+                    console.log("⚡ Gemini error encountered. Attempting Groq fallback...");
+                    let groqRes = await callOpenAICompatible(groqKey, GROQ_BASE_URL, "llama-3.3-70b-versatile", inputText, systemInstruction);
+                    if (!groqRes) {
+                        groqRes = await callOpenAICompatible(groqKey, GROQ_BASE_URL, DEEPSEEK_MODEL, inputText, systemInstruction);
+                    }
+                    if (groqRes && groqRes.trim().length > 0) {
+                        let cleanText = groqRes.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                        return { text: forceFemaleHindi(cleanText || groqRes), action: 'NONE' };
+                    }
+                } catch(groqErr) {
+                    console.warn("Groq fallback also failed:", groqErr);
+                }
             }
             
             if (attempts >= 3) {

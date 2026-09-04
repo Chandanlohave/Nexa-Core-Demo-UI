@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppConfig, VOICES, VoiceKey, Reminder } from '../types';
+import { testGeminiApiKey, testGroqApiKey } from '../services/geminiService';
 
 interface UserSettingsPanelProps {
   isOpen: boolean;
@@ -24,7 +25,47 @@ const THEME_COLORS = [
 
 const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange, currentVoice = 'Kore', onVoiceChange, reminders = [], onDeleteReminder, onAddReminder }) => {
   const [taskInput, setTaskInput] = useState('');
+  const [geminiKeyInput, setGeminiKeyInput] = useState(() => localStorage.getItem('nexa_client_api_key') || '');
+  const [groqKeyInput, setGroqKeyInput] = useState(() => localStorage.getItem('nexa_client_groq_key') || '');
+  const [keySaveMsg, setKeySaveMsg] = useState('');
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [testingGroq, setTestingGroq] = useState(false);
+  const [testResult, setTestResult] = useState<{ gemini?: string; groq?: string }>({});
+
   if (!isOpen) return null;
+
+  const handleSaveKeys = () => {
+    if (geminiKeyInput.trim().length < 10) {
+      setKeySaveMsg('❌ Error: Gemini Key required (min 10 chars)');
+      return;
+    }
+    localStorage.setItem('nexa_client_api_key', geminiKeyInput.trim());
+    if (groqKeyInput.trim().length > 10) {
+      localStorage.setItem('nexa_client_groq_key', groqKeyInput.trim());
+    } else {
+      localStorage.removeItem('nexa_client_groq_key');
+    }
+    setKeySaveMsg('✓ API Keys Saved Successfully!');
+    setTimeout(() => setKeySaveMsg(''), 3000);
+  };
+
+  const handleTestGemini = async () => {
+    setTestingGemini(true);
+    const res = await testGeminiApiKey(geminiKeyInput.trim());
+    setTestingGemini(false);
+    setTestResult(prev => ({ ...prev, gemini: res.success ? 'Gemini 3.7 Online ✓' : `Error: ${res.message}` }));
+  };
+
+  const handleTestGroq = async () => {
+    if (!groqKeyInput.trim()) {
+      setTestResult(prev => ({ ...prev, groq: 'Enter Groq key first' }));
+      return;
+    }
+    setTestingGroq(true);
+    const res = await testGroqApiKey(groqKeyInput.trim());
+    setTestingGroq(false);
+    setTestResult(prev => ({ ...prev, groq: res.success ? 'Groq Fallback Active ✓' : `Error: ${res.message}` }));
+  };
 
   const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
     const isActive = config.theme === value;
@@ -77,6 +118,83 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
             <ThemeButton label="Dark" value="dark" />
             <ThemeButton label="System" value="system" />
           </div>
+        </div>
+
+        {/* PERSONAL API KEYS CONFIGURATION */}
+        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-nexa-cyan text-xs font-mono font-bold tracking-wider">
+                    API KEY CONFIGURATION
+                </label>
+                <span className="text-[9px] text-zinc-500 font-mono">DEVICE ONLY</span>
+            </div>
+
+            {keySaveMsg && (
+                <div className={`p-1.5 mb-2 text-[10px] font-mono rounded ${keySaveMsg.includes('Error') ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-800'}`}>
+                    {keySaveMsg}
+                </div>
+            )}
+
+            {/* Gemini Key Input */}
+            <div className="space-y-1 mb-3">
+                <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-zinc-300 font-semibold">1. Gemini API Key <span className="text-red-400">*</span></span>
+                    <button 
+                        type="button" 
+                        onClick={handleTestGemini} 
+                        disabled={testingGemini || !geminiKeyInput}
+                        className="text-nexa-cyan hover:underline disabled:opacity-40"
+                    >
+                        {testingGemini ? 'Testing...' : 'Test Key'}
+                    </button>
+                </div>
+                <input 
+                    type="password"
+                    value={geminiKeyInput}
+                    onChange={(e) => setGeminiKeyInput(e.target.value)}
+                    placeholder="AIzaSy... (Required)"
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-white focus:border-nexa-cyan outline-none font-mono"
+                />
+                {testResult.gemini && (
+                    <div className={`text-[9px] font-mono ${testResult.gemini.includes('Online') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {testResult.gemini}
+                    </div>
+                )}
+            </div>
+
+            {/* Groq Key Input */}
+            <div className="space-y-1 mb-3">
+                <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-zinc-300 font-semibold">2. Groq Fallback Key <span className="text-zinc-500 text-[9px] font-normal">(Optional)</span></span>
+                    <button 
+                        type="button" 
+                        onClick={handleTestGroq} 
+                        disabled={testingGroq || !groqKeyInput}
+                        className="text-amber-400 hover:underline disabled:opacity-40"
+                    >
+                        {testingGroq ? 'Testing...' : 'Test Groq'}
+                    </button>
+                </div>
+                <input 
+                    type="password"
+                    value={groqKeyInput}
+                    onChange={(e) => setGroqKeyInput(e.target.value)}
+                    placeholder="gsk_... (Fallback if Gemini down)"
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-white focus:border-amber-400 outline-none font-mono"
+                />
+                {testResult.groq && (
+                    <div className={`text-[9px] font-mono ${testResult.groq.includes('Active') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {testResult.groq}
+                    </div>
+                )}
+            </div>
+
+            <button 
+                onClick={handleSaveKeys}
+                className="w-full py-1.5 bg-nexa-cyan/20 border border-nexa-cyan/60 hover:bg-nexa-cyan hover:text-black text-nexa-cyan transition-colors rounded text-xs font-mono font-bold tracking-widest uppercase"
+            >
+                SAVE API KEYS
+            </button>
         </div>
         
         {onVoiceChange && (

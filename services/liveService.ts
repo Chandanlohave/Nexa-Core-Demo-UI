@@ -192,16 +192,18 @@ export class LiveSessionManager {
     const customKey = localStorage.getItem('nexa_client_api_key');
     if (customKey && customKey.trim().length > 10) return customKey.trim();
 
+    let isAdmin = false;
     try {
         const userStr = localStorage.getItem('nexa_user');
         if (userStr) {
             const user = JSON.parse(userStr);
-            const isVip = isUserBhabhi(user);
-            if (user.role === 'USER' && !isVip) throw new Error("USER_API_KEY_REQUIRED");
+            if (user.role === UserRole.ADMIN) {
+                isAdmin = true;
+            }
         }
-    } catch(e: any) {
-        if(e.message === "USER_API_KEY_REQUIRED") throw e;
-    }
+    } catch(e: any) {}
+
+    if (!isAdmin) throw new Error("USER_API_KEY_REQUIRED");
 
     const systemKey = process.env.API_KEY || (process.env as any).GEMINI_API_KEY || (import.meta as any).env?.VITE_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
     if (systemKey && systemKey !== "undefined" && systemKey !== "null" && systemKey.trim() !== '') return systemKey.trim();
