@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig, UserFact, UserProfile, VOICES, VoiceKey, Reminder, AccessKeyDefinition } from '../types';
-import { getFacts, deleteFact, getUserProfile, syncUserProfile, fetchSystemConfig, saveSystemConfig, createCustomAccessKey, getAccessKeys, deleteAccessKey } from '../services/memoryService';
+import { getFacts, deleteFact, getUserProfile, syncUserProfile, fetchSystemConfig, saveSystemConfig, createCustomAccessKey, getAccessKeys, deleteAccessKey, subscribeToAccessKeys, subscribeToRegisteredUsers } from '../services/memoryService';
 import { testGeminiApiKey } from '../services/geminiService';
 import { getEvolutionState, triggerActiveEvolutionCycle, EvolutionMetric } from '../services/evolutionService';
+import { Key, Users, RefreshCw, Copy, Check, Trash2, ShieldCheck, UserCheck } from 'lucide-react';
+import { CalendarSync } from './CalendarSync';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -89,6 +91,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Access Keys State
   const [customKeys, setCustomKeys] = useState<AccessKeyDefinition[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
+  const [activeKeyTab, setActiveKeyTab] = useState<'KEYS' | 'USERS'>('KEYS');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyMobile, setNewKeyMobile] = useState('');
   const [keyStatus, setKeyStatus] = useState('');
@@ -133,9 +139,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   }, [isOpen, user]);
 
+  // Real-time Access Keys and Registered Users Subscription
+  useEffect(() => {
+      if (!isOpen) return;
+      setIsLoadingKeys(true);
+      const unsubKeys = subscribeToAccessKeys((keys) => {
+          setCustomKeys(keys);
+          setIsLoadingKeys(false);
+      });
+      const unsubUsers = subscribeToRegisteredUsers((users) => {
+          setRegisteredUsers(users);
+      });
+      return () => {
+          unsubKeys();
+          unsubUsers();
+      };
+  }, [isOpen]);
+
   const refreshAccessKeys = async () => {
+      setIsLoadingKeys(true);
       const keys = await getAccessKeys();
       setCustomKeys(keys);
+      setIsLoadingKeys(false);
   };
 
   useEffect(() => {
@@ -290,23 +315,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleCreateKey = async () => {
-      if (!newKeyName.trim()) return;
+      let keyToCreate = newKeyName.trim().toUpperCase();
+      const mobile = newKeyMobile.trim();
+
+      // Intelligent Auto-Key generation if no key name entered
+      if (!keyToCreate) {
+          if (mobile) {
+              const suffix = mobile.length >= 4 ? mobile.slice(-4) : mobile;
+              keyToCreate = `KEY-${suffix}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+          } else {
+              keyToCreate = `VIP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+          }
+      }
+
       setKeyStatus('CREATING...');
-      const success = await createCustomAccessKey(newKeyName.trim(), newKeyMobile.trim() || undefined);
+      const success = await createCustomAccessKey(keyToCreate, mobile || undefined);
       if (success) {
-          setKeyStatus('SUCCESS');
+          setKeyStatus(`✓ CREATED: ${keyToCreate}`);
           setNewKeyName('');
           setNewKeyMobile('');
-          refreshAccessKeys();
+          await refreshAccessKeys();
       } else {
-          setKeyStatus('ERROR');
+          setKeyStatus('ERROR CREATING KEY');
       }
-      setTimeout(() => setKeyStatus(''), 2000);
+      setTimeout(() => setKeyStatus(''), 4000);
+  };
+
+  const handleCopyKey = (key: string) => {
+      navigator.clipboard.writeText(key).then(() => {
+          setCopiedKey(key);
+          setTimeout(() => setCopiedKey(null), 2500);
+      }).catch(() => {});
   };
 
   const handleDeleteKey = async (key: string) => {
       await deleteAccessKey(key);
-      refreshAccessKeys();
+      await refreshAccessKeys();
   };
 
   if (!isOpen) return null;
@@ -898,49 +942,273 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               )}
           </div>
 
-          {/* --- CUSTOM ACCESS KEYS MANAGEMENT --- */}
-          <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+          {/* --- CUSTOM ACCESS KEYS & USER MANAGEMENT --- */}
+          <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
                <div className="flex justify-between items-center">
-                   <label className="block text-zinc-600 dark:text-zinc-400 text-xs font-mono">CUSTOM ACCESS KEYS</label>
-                   {keyStatus && <span className="text-[9px] text-cyan-400 font-mono">{keyStatus}</span>}
+                   <div className="flex items-center gap-2">
+                       <label className="text-zinc-600 dark:text-zinc-400 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5">
+                           <Key className="w-3.5 h-3.5 text-cyan-400" />
+                           CUSTOM ACCESS KEYS & USERS
+                       </label>
+                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono bg-cyan-950/60 text-cyan-400 border border-cyan-800/40">
+                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                           SYNCED
+                       </span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                       {keyStatus && <span className="text-[9px] text-cyan-400 font-mono font-semibold">{keyStatus}</span>}
+                       <button
+                           type="button"
+                           onClick={refreshAccessKeys}
+                           title="Refresh from cloud database"
+                           className="p-1 rounded bg-zinc-800/60 hover:bg-cyan-950 text-zinc-400 hover:text-cyan-400 border border-zinc-700/50 transition-colors"
+                       >
+                           <RefreshCw className={`w-3 h-3 ${isLoadingKeys ? 'animate-spin text-cyan-400' : ''}`} />
+                       </button>
+                   </div>
                </div>
-               
-               <div className="p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">
-                   <input 
-                       type="text" 
-                       value={newKeyName} 
-                       onChange={(e) => setNewKeyName(e.target.value.toUpperCase())}
-                       placeholder="NEW KEY NAME (e.g. VIP_GUEST)"
-                       className="w-full bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white p-2 font-mono rounded focus:border-cyan-400 focus:outline-none uppercase"
-                   />
-                   <input 
-                       type="text" 
-                       value={newKeyMobile} 
-                       onChange={(e) => setNewKeyMobile(e.target.value)}
-                       placeholder="BIND TO MOBILE (Optional)"
-                       className="w-full bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white p-2 font-mono rounded focus:border-cyan-400 focus:outline-none"
-                   />
-                   <button 
-                      type="button"
-                      onClick={handleCreateKey}
-                      className="w-full py-2 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-400 hover:text-black text-xs font-bold font-mono transition-all rounded-lg cursor-pointer"
+
+               {/* Tab Switcher: Custom Keys vs Registered Users */}
+               <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+                   <button
+                       type="button"
+                       onClick={() => setActiveKeyTab('KEYS')}
+                       className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[10px] font-mono font-bold tracking-wider transition-all ${
+                           activeKeyTab === 'KEYS'
+                               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm'
+                               : 'text-zinc-500 hover:text-zinc-300'
+                       }`}
                    >
-                      GENERATE KEY
+                       <Key className="w-3 h-3" />
+                       ACTIVE KEYS ({customKeys.length})
+                   </button>
+                   <button
+                       type="button"
+                       onClick={() => setActiveKeyTab('USERS')}
+                       className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[10px] font-mono font-bold tracking-wider transition-all ${
+                           activeKeyTab === 'USERS'
+                               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm'
+                               : 'text-zinc-500 hover:text-zinc-300'
+                       }`}
+                   >
+                       <Users className="w-3 h-3" />
+                       REGISTERED USERS ({registeredUsers.length})
                    </button>
                </div>
 
-               {/* LIST OF KEYS */}
-               <div className="max-h-28 overflow-y-auto space-y-1">
-                   {customKeys.map(k => (
-                       <div key={k.key} className="flex justify-between items-center p-2 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-lg">
-                           <div className="flex-1">
-                               <div className="text-xs text-zinc-900 dark:text-white font-mono font-bold">{k.key}</div>
-                               {k.assignedMobile && <div className="text-[9px] text-zinc-500">LOCKED TO: {k.assignedMobile}</div>}
-                           </div>
-                           <button onClick={() => handleDeleteKey(k.key)} className="text-zinc-400 hover:text-red-500 text-sm font-bold">&times;</button>
+               {activeKeyTab === 'KEYS' ? (
+                   <>
+                       {/* KEY CREATION FORM */}
+                       <div className="p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">
+                           <input 
+                               type="text" 
+                               value={newKeyName} 
+                               onChange={(e) => setNewKeyName(e.target.value.toUpperCase())}
+                               placeholder="NEW KEY NAME (e.g. VIP_GUEST or leave blank for auto)"
+                               className="w-full bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white p-2 font-mono rounded focus:border-cyan-400 focus:outline-none uppercase"
+                           />
+                           <input 
+                               type="text" 
+                               value={newKeyMobile} 
+                               onChange={(e) => setNewKeyMobile(e.target.value)}
+                               placeholder="BIND TO MOBILE (Optional, e.g. 9876543210)"
+                               className="w-full bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 text-xs text-zinc-900 dark:text-white p-2 font-mono rounded focus:border-cyan-400 focus:outline-none"
+                           />
+                           <button 
+                              type="button"
+                              onClick={handleCreateKey}
+                              className="w-full py-2 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-400 hover:text-black text-xs font-bold font-mono transition-all rounded-lg cursor-pointer flex items-center justify-center gap-2"
+                           >
+                              <Key className="w-3.5 h-3.5" />
+                              GENERATE KEY
+                           </button>
                        </div>
-                   ))}
-               </div>
+
+                       {/* LIST OF KEYS WITH CARDS */}
+                       <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                           {isLoadingKeys && customKeys.length === 0 ? (
+                               <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl text-center text-xs font-mono text-zinc-500 flex items-center justify-center gap-2">
+                                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                                   FETCHING KEYS FROM CLOUD...
+                               </div>
+                           ) : customKeys.length === 0 ? (
+                               <div className="p-4 bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl text-center font-mono space-y-1">
+                                   <div className="text-xs text-zinc-400 font-bold flex items-center justify-center gap-1.5">
+                                       <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                                       NO CUSTOM KEYS GENERATED YET
+                                   </div>
+                                   <p className="text-[10px] text-zinc-500">
+                                       Default Master Key <span className="text-cyan-400 font-semibold">'NEXA2025'</span> is active. Create a custom key above for specific users or VIP guests.
+                                   </p>
+                               </div>
+                           ) : (
+                               customKeys.map((k, kIdx) => {
+                                   const matchedUser = k.assignedMobile
+                                       ? registeredUsers.find(u => u.mobile === k.assignedMobile || (u.mobile && k.assignedMobile && u.mobile.replace(/\D/g, '') === k.assignedMobile.replace(/\D/g, '')))
+                                       : null;
+                                   const userName = matchedUser?.name || k.assignedName;
+                                   const isCopied = copiedKey === k.key;
+
+                                   return (
+                                       <div 
+                                           key={k.key ? ("k_" + k.key) : ("kidx_" + kIdx)} 
+                                           className="p-2.5 bg-zinc-50 dark:bg-black/80 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500/40 rounded-xl transition-all space-y-1.5"
+                                       >
+                                           <div className="flex justify-between items-center">
+                                               <div className="flex items-center gap-2">
+                                                   <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 text-xs font-mono font-bold tracking-wider">
+                                                       {k.key}
+                                                   </span>
+                                                   <button
+                                                       type="button"
+                                                       onClick={() => handleCopyKey(k.key)}
+                                                       className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-cyan-900 text-zinc-300 hover:text-cyan-200 border border-zinc-700 transition-colors"
+                                                       title="Copy access key to clipboard"
+                                                   >
+                                                       {isCopied ? <Check className="w-2.5 h-2.5 text-green-400" /> : <Copy className="w-2.5 h-2.5" />}
+                                                       {isCopied ? 'COPIED' : 'COPY'}
+                                                   </button>
+                                               </div>
+                                               <button 
+                                                   type="button"
+                                                   onClick={() => handleDeleteKey(k.key)} 
+                                                   title="Delete key"
+                                                   className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
+                                               >
+                                                   <Trash2 className="w-3.5 h-3.5" />
+                                               </button>
+                                           </div>
+
+                                           {/* Details: Mobile binding & Registered user */}
+                                           <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono text-zinc-400">
+                                               <div>
+                                                   {k.assignedMobile ? (
+                                                       userName ? (
+                                                           <span className="text-green-400 font-semibold flex items-center gap-1">
+                                                               <UserCheck className="w-3 h-3" />
+                                                               USER: {userName} ({k.assignedMobile})
+                                                           </span>
+                                                       ) : (
+                                                           <span className="text-yellow-400">
+                                                               LOCKED TO: {k.assignedMobile} (Pending Login)
+                                                           </span>
+                                                       )
+                                                   ) : (
+                                                       <span className="text-zinc-500">
+                                                           UNBOUND (ANY USER CAN USE)
+                                                       </span>
+                                                   )}
+                                               </div>
+                                               {k.createdDate && (
+                                                   <span className="text-[9px] text-zinc-600">
+                                                       {k.createdDate}
+                                                   </span>
+                                               )}
+                                           </div>
+                                       </div>
+                                   );
+                               })
+                           )}
+                       </div>
+                   </>
+               ) : (
+                   /* REGISTERED USERS DIRECTORY */
+                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                       {registeredUsers.length === 0 ? (
+                           <div className="p-4 bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl text-center font-mono space-y-1">
+                               <div className="text-xs text-zinc-400 font-bold flex items-center justify-center gap-1.5">
+                                   <Users className="w-4 h-4 text-cyan-400" />
+                                   NO REGISTERED USERS FOUND
+                               </div>
+                               <p className="text-[10px] text-zinc-500">
+                                   Users who sign up or log in via Access Code or Mobile will automatically be indexed here.
+                               </p>
+                           </div>
+                       ) : (
+                           registeredUsers.map((u, uIdx) => {
+                               const linkedKey = u.accessKey || customKeys.find(k => k.assignedMobile === u.mobile)?.key;
+                               const isUserAdmin = u.role === 'ADMIN';
+
+                               return (
+                               <div 
+                                    key={u.id || (u.mobile ? ("usr_" + u.mobile) : ("idx_" + uIdx))}
+                                   className="p-2.5 bg-zinc-50 dark:bg-black/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1.5 font-mono"
+                               >
+                                   <div className="flex justify-between items-center">
+                                       <div className="flex items-center gap-2">
+                                           <span className="text-xs text-white font-bold">{u.name || 'ANONYMOUS'}</span>
+                                           <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                               isUserAdmin 
+                                                   ? 'bg-red-950 text-red-300 border border-red-800/60' 
+                                                   : 'bg-cyan-950 text-cyan-300 border border-cyan-800/60'
+                                           }`}>
+                                               {u.role}
+                                           </span>
+                                       </div>
+                                       {!isUserAdmin && (
+                                           <button
+                                               type="button"
+                                               onClick={() => {
+                                                   setNewKeyMobile(u.mobile);
+                                                   setNewKeyName(linkedKey || `KEY_${(u.name || 'USER').toUpperCase().replace(/[^A-Z0-9]/g, '')}`);
+                                                   setActiveKeyTab('KEYS');
+                                               }}
+                                               className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-400 border border-cyan-800/50 transition-colors"
+                                           >
+                                               {linkedKey ? 'RENEW KEY' : '+ ASSIGN KEY'}
+                                           </button>
+                                       )}
+                                   </div>
+                                   <div className="flex flex-wrap justify-between text-[10px] text-zinc-400">
+                                       <span>MOBILE: {u.mobile}</span>
+                                       {u.voice && <span>VOICE: {u.voice}</span>}
+                                   </div>
+                                   {/* USER ACCESS CODE STATUS */}
+                                   {isUserAdmin ? (
+                                       <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 pt-1 border-t border-zinc-800">
+                                           <ShieldCheck className="w-3.5 h-3.5 text-red-400" />
+                                           <span className="text-zinc-300 font-semibold">MASTER ADMIN</span>
+                                           <span className="text-zinc-500 text-[9px]">(PIN AUTH)</span>
+                                       </div>
+                                   ) : (
+                                       <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-zinc-800">
+                                           <div className="flex items-center gap-1.5 text-[10px]">
+                                               <Key className="w-3 h-3 text-cyan-400 shrink-0" />
+                                               <span className="text-zinc-400 font-semibold text-[10px]">ACCESS CODE:</span>
+                                               {linkedKey ? (
+                                                   <span className="px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-bold tracking-wide text-xs">
+                                                       {linkedKey}
+                                                   </span>
+                                               ) : (
+                                                   <span className="text-yellow-400 text-[10px]">
+                                                       DEFAULT (NEXA2025)
+                                                   </span>
+                                               )}
+                                           </div>
+                                           {linkedKey && (
+                                               <button
+                                                   type="button"
+                                                   onClick={() => handleCopyKey(linkedKey)}
+                                                   className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-cyan-900 text-zinc-300 hover:text-cyan-200 border border-zinc-700 transition-colors"
+                                                   title="Copy access key"
+                                               >
+                                                   {copiedKey === linkedKey ? <Check className="w-2.5 h-2.5 text-green-400" /> : <Copy className="w-2.5 h-2.5" />}
+                                                   {copiedKey === linkedKey ? 'COPIED' : 'COPY'}
+                                               </button>
+                                           )}
+                                       </div>
+                                   )}
+                                   {u.lastLoginDate && (
+                                       <div className="text-[9px] text-zinc-600">
+                                           LAST ACTIVE: {u.lastLoginDate}
+                                       </div>
+                                   )}
+                               </div>
+                               );
+                           })
+                       )}
+                   </div>
+               )}
           </div>
 
           {/* --- FALLBACK & REPAIR KEYS --- */}
@@ -1048,6 +1316,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                   )}
              </div>
+          </div>
+
+          <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+             <CalendarSync />
           </div>
 
           {/* --- SECURITY & ACCESS SECTION --- */}

@@ -1,4 +1,4 @@
-
+import { RefreshCw, SwitchCamera } from "lucide-react";
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Auth from './components/Auth';
 import HUD from './components/HUD';
@@ -14,6 +14,7 @@ import { AgentDebateModal } from './components/AgentDebateModal';
 import { CustomAgentModal } from './components/CustomAgentModal';
 import { MemoryVaultModal } from './components/MemoryVaultModal';
 import { TacticalEvolutionHub } from './components/TacticalEvolutionHub';
+import { WorkspaceHubPanel } from './components/WorkspaceHubPanel';
 import { startSquadIntroSequence } from './services/squadService';
 import { GestureController, GestureData } from './components/GestureController';
 import { logoutFirebase } from './services/firebaseConfig';
@@ -31,6 +32,7 @@ import { NexaCoreController } from './core/NexaCoreController';
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
 const LogoutIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg> );
 const StudyIcon = () => ( <svg className="w-5 h-5 text-nexa-blue/80 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg> );
+const CloudIcon = () => ( <svg className="w-5 h-5 text-blue-400/80 hover:text-blue-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg> );
 const KeyboardIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /><path d="M20 12H4" /></svg> );
 const SendIcon = () => ( <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg> );
 const CameraIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
@@ -55,7 +57,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, isOffline }: any) => {
+const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, onWorkspaceHub, isOffline }: any) => {
     const firstName = React.useMemo(() => {
         if (!userName) return 'USER';
         const clean = userName.trim();
@@ -99,6 +101,16 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
                 >
                     <StudyIcon />
                     <span className="absolute -bottom-8 left-0 text-[8px] font-mono bg-zinc-900 text-nexa-cyan border border-nexa-cyan/30 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50 shadow-md">STUDY BUDDY</span>
+                </button>
+
+                {/* Workspace Hub Icon */}
+                <button 
+                    onClick={onWorkspaceHub} 
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-zinc-600 dark:text-blue-400/80 hover:text-blue-400 hover:bg-zinc-200 dark:hover:bg-blue-400/10 border border-transparent hover:border-blue-400/20 transition-colors group relative cursor-pointer shrink-0" 
+                    title="Google Workspace"
+                >
+                    <CloudIcon />
+                    <span className="absolute -bottom-8 left-0 text-[8px] font-mono bg-zinc-900 text-blue-400 border border-blue-400/30 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50 shadow-md">WORKSPACE</span>
                 </button>
 
                 {isOffline ? (
@@ -351,6 +363,7 @@ const App: React.FC = () => {
     const [showAdmin, setShowAdmin] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showStudyHub, setShowStudyHub] = useState(false);
+    const [showWorkspaceHub, setShowWorkspaceHub] = useState(false);
     const [showAccounts, setShowAccounts] = useState(false);
     const [showSquad, setShowSquad] = useState(false);
     const [showPipeline, setShowPipeline] = useState(false);
@@ -374,8 +387,11 @@ const App: React.FC = () => {
     const isCameraActiveRef = useRef(false);
     
     const [zoomLevel, setZoomLevel] = useState(1);
-    const [maxZoom, setMaxZoom] = useState(3);
-    const [zoomMethod, setZoomMethod] = useState<'hardware' | 'digital'>('digital'); 
+    const zoomLevelRef = useRef(1);
+    const [maxZoom, setMaxZoom] = useState(4);
+    const [zoomMethod, setZoomMethod] = useState<'hardware' | 'digital'>('digital');
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment'); 
+    const facingModeRef = useRef<'environment' | 'user'>('environment'); 
     
     const [tapPoint, setTapPoint] = useState<{x: number, y: number} | null>(null);
     const lastTapTime = useRef<number>(0);
@@ -545,6 +561,56 @@ const App: React.FC = () => {
         setZoomLevel(1);
     }, []);
 
+    const getStreamForFacingMode = async (targetMode: 'user' | 'environment') => {
+        // 1. Try device enumeration to find explicit front/back camera
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            if (videoDevices.length > 1) {
+                const isUser = targetMode === 'user';
+                const match = videoDevices.find(d => {
+                    const l = (d.label || '').toLowerCase();
+                    return isUser 
+                        ? (l.includes('front') || l.includes('user') || l.includes('face') || l.includes('selfie') || l.includes('forward'))
+                        : (l.includes('back') || l.includes('rear') || l.includes('environment') || l.includes('world'));
+                });
+                if (match && match.deviceId) {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            deviceId: { exact: match.deviceId },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                }
+            }
+        } catch (enumErr) {
+            console.warn("Device enumeration bypass:", enumErr);
+        }
+
+        // 2. Try exact facingMode constraint
+        try {
+            return await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { exact: targetMode },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            });
+        } catch (exactErr) {
+            console.warn("Exact facingMode failed, trying direct facingMode:", exactErr);
+        }
+
+        // 3. Fallback direct facingMode
+        return await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: targetMode,
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
+    };
+
     const handleToggleCamera = useCallback(async () => {
         if (isCameraActive) {
             liveSession?.stopVideo();
@@ -556,33 +622,23 @@ const App: React.FC = () => {
         if (!liveSession) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: "environment",
-                    width: { ideal: 1280 }, 
-                    height: { ideal: 720 },
-                    // @ts-ignore
-                    zoom: true 
-                } 
-            });
+            const stream = await getStreamForFacingMode(facingModeRef.current);
             cameraStreamRef.current = stream;
             
             const track = stream.getVideoTracks()[0];
             const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
             
             // @ts-ignore
-            if (capabilities.zoom) {
+            if (capabilities.zoom && capabilities.zoom.max > 1) {
                 setZoomMethod('hardware');
                 // @ts-ignore
-                setMaxZoom(capabilities.zoom.max || 3);
-                // @ts-ignore
-                setZoomLevel(capabilities.zoom.min || 1);
+                setMaxZoom(Math.min(5, Number(capabilities.zoom.max) || 4));
             } else {
-                console.warn("Hardware zoom not supported. Using Digital Zoom.");
                 setZoomMethod('digital');
-                setMaxZoom(3); 
-                setZoomLevel(1);
+                setMaxZoom(4); 
             }
+            setZoomLevel(1);
+            zoomLevelRef.current = 1;
             
             try {
                 // @ts-ignore
@@ -592,7 +648,7 @@ const App: React.FC = () => {
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 await videoRef.current.play();
-                liveSession.startVideo(videoRef.current);
+                liveSession.startVideo(videoRef.current, () => zoomLevelRef.current);
                 setCameraState(true);
                 setHudState(HUDState.WATCHING);
                 
@@ -607,6 +663,59 @@ const App: React.FC = () => {
         }
     }, [isCameraActive, liveSession, cleanupCamera]);
     
+    
+    const toggleFacingMode = async () => {
+        const newMode: 'user' | 'environment' = (facingModeRef.current === 'environment') ? 'user' : 'environment';
+        setFacingMode(newMode);
+        facingModeRef.current = newMode;
+        if (isCameraActive) {
+            try {
+                liveSession?.stopVideo();
+                if (cameraStreamRef.current) {
+                    cameraStreamRef.current.getTracks().forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
+                    cameraStreamRef.current = null;
+                }
+                // Short wait to ensure hardware bus is freed
+                await new Promise(r => setTimeout(r, 120));
+
+                const stream = await getStreamForFacingMode(newMode);
+                cameraStreamRef.current = stream;
+                const track = stream.getVideoTracks()[0];
+                const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+                // @ts-ignore
+                if (capabilities.zoom && capabilities.zoom.max > 1) {
+                    setZoomMethod('hardware');
+                    // @ts-ignore
+                    setMaxZoom(Math.min(5, Number(capabilities.zoom.max) || 4));
+                } else {
+                    setZoomMethod('digital');
+                    setMaxZoom(4);
+                }
+                setZoomLevel(1);
+                zoomLevelRef.current = 1;
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    try {
+                        await videoRef.current.play();
+                    } catch (playErr) {
+                        console.warn("Video play interrupted:", playErr);
+                    }
+                    if (liveSession) {
+                        liveSession.startVideo(videoRef.current, () => zoomLevelRef.current);
+                    }
+                }
+                setCameraState(true);
+            } catch (e) {
+                console.error("Camera flip failed:", e);
+                setCameraState(true);
+            }
+        }
+    };
+
     const handleToggleTorch = useCallback(async () => {
         if (!cameraStreamRef.current) return;
         const track = cameraStreamRef.current.getVideoTracks()[0];
@@ -622,20 +731,23 @@ const App: React.FC = () => {
         }
     }, [isTorchOn]);
 
-    const handleZoomChange = async (e: React.SyntheticEvent<HTMLInputElement>) => {
-        const newZoom = parseFloat(e.currentTarget.value);
-        setZoomLevel(newZoom);
+    const applyZoomStep = useCallback(async (delta: number) => {
+        const nextZoom = Math.max(1, Math.min(maxZoom, Number((zoomLevel + delta).toFixed(1))));
+        setZoomLevel(nextZoom);
+        zoomLevelRef.current = nextZoom;
 
-        if (zoomMethod === 'hardware' && cameraStreamRef.current) {
+        if (cameraStreamRef.current) {
             const track = cameraStreamRef.current.getVideoTracks()[0];
-            if (track && track.applyConstraints) {
+            if (track && typeof track.applyConstraints === 'function') {
                 try {
                     // @ts-ignore
-                    await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
-                } catch(e) { console.warn("Hardware zoom failed", e); }
+                    await track.applyConstraints({ advanced: [{ zoom: nextZoom }] });
+                } catch(e) {
+                    // Handled gracefully via CSS scale
+                }
             }
-        } 
-    };
+        }
+    }, [maxZoom, zoomLevel]);
 
     const handleVideoTap = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!isCameraActive || !liveSession) return;
@@ -797,11 +909,13 @@ const App: React.FC = () => {
                     playsInline 
                     muted 
                     autoPlay
-                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${isCameraActive ? 'opacity-100' : 'opacity-0'}`} 
+                    className={`absolute inset-0 w-full h-full object-cover transition-transform duration-200 ${isCameraActive ? 'opacity-100' : 'opacity-0'}`} 
                     style={{ 
-                        transform: (isCameraActive && zoomMethod === 'digital' && zoomLevel > 1) 
-                            ? `scale(${zoomLevel})` 
-                            : 'none'
+                        transform: [
+                            facingMode === 'user' ? 'scaleX(-1)' : '',
+                            zoomLevel > 1 ? `scale(${zoomLevel})` : ''
+                        ].filter(Boolean).join(' ') || 'none',
+                        transformOrigin: 'center center'
                     }}
                 />
                 
@@ -811,33 +925,41 @@ const App: React.FC = () => {
                         onClick={handleVideoTap}
                     >
                         <div className="absolute top-[80px] right-4 flex flex-col items-end gap-1 font-mono text-[10px] text-nexa-cyan/80 z-20 pointer-events-none">
-                            <span className="bg-black/40 px-1 rounded">REC ●</span>
-                            <span className="bg-black/40 px-1 rounded">ZOOM: {zoomMethod === 'digital' ? 'DIGITAL' : 'OPTICAL'}</span>
-                            <span className="bg-black/40 px-1 rounded">EXP: +0.0</span>
-                            {isTorchOn && <span className="text-yellow-400 bg-black/40 px-1 rounded">⚡ FLASH ON</span>}
+                            <span className="bg-black/50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-white/10">
+                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                {facingMode === 'user' ? 'FRONT CAM' : 'BACK CAM'}
+                            </span>
+                            <span className="bg-black/50 px-1.5 py-0.5 rounded border border-white/10">ZOOM: {zoomLevel.toFixed(1)}x</span>
+                            {isTorchOn && <span className="text-yellow-400 bg-black/50 px-1.5 py-0.5 rounded border border-white/10">⚡ FLASH ON</span>}
                         </div>
 
+
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); toggleFacingMode(); }}
+                            className="absolute top-[160px] right-4 bg-black/60 active:scale-95 transition-transform text-nexa-cyan border border-nexa-cyan/50 rounded-full p-2.5 z-50 pointer-events-auto shadow-lg backdrop-blur-sm"
+                            title={`Switch to ${facingMode === 'user' ? 'Back' : 'Front'} Camera`}
+                        >
+                            <SwitchCamera size={22} className={facingMode === 'user' ? 'text-amber-400' : 'text-nexa-cyan'} />
+                        </button>
                         <div 
-                            className="absolute right-6 top-1/2 -translate-y-1/2 h-48 w-12 bg-black/40 rounded-full border border-nexa-cyan/30 flex flex-col items-center justify-center z-50 pointer-events-auto" 
+                            className="absolute right-6 top-1/2 -translate-y-1/2 h-48 w-12 bg-black/50 backdrop-blur-md rounded-full border border-nexa-cyan/40 flex flex-col items-center justify-center z-50 pointer-events-auto shadow-xl" 
                             onClick={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}
                             onTouchStart={(e) => e.stopPropagation()}
                             onTouchMove={(e) => e.stopPropagation()} 
                             onTouchEnd={(e) => e.stopPropagation()}
                         >
-                            <span className="text-[10px] font-mono text-nexa-cyan mb-2 font-bold">{maxZoom.toFixed(1)}x</span>
-                            <input 
-                                type="range" 
-                                min="1" 
-                                max={maxZoom} 
-                                step="0.1" 
-                                value={zoomLevel} 
-                                onChange={handleZoomChange}
-                                onInput={handleZoomChange}
-                                className="w-32 h-8 bg-nexa-cyan/20 rounded-lg appearance-none cursor-pointer -rotate-90 origin-center"
-                                style={{ width: '120px', height: '20px' }} 
-                            />
-                            <span className="text-[10px] font-mono text-nexa-cyan mt-2 font-bold">1.0x</span>
+                            <span className="text-[10px] font-mono text-nexa-cyan mb-1 font-bold">{maxZoom.toFixed(1)}x</span>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); applyZoomStep(0.5); }}
+                                className="w-8 h-8 flex items-center justify-center bg-nexa-cyan/20 rounded-full text-nexa-cyan mb-2 active:bg-nexa-cyan/50 hover:bg-nexa-cyan/30 font-bold select-none text-lg transition-colors"
+                            >+</button>
+                            <span className="text-xs font-mono text-white font-bold">{zoomLevel.toFixed(1)}x</span>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); applyZoomStep(-0.5); }}
+                                className="w-8 h-8 flex items-center justify-center bg-nexa-cyan/20 rounded-full text-nexa-cyan mt-2 active:bg-nexa-cyan/50 hover:bg-nexa-cyan/30 font-bold select-none text-lg transition-colors"
+                            >-</button>
+                            <span className="text-[10px] font-mono text-nexa-cyan mt-1 font-bold">1.0x</span>
                         </div>
 
                         {tapPoint && (
@@ -905,7 +1027,8 @@ const App: React.FC = () => {
                         })}
                         onLogout={handleLogout} 
                         onSettings={handleSettingsClick} 
-                        onStudyHub={() => setShowStudyHub(true)} 
+                        onStudyHub={() => setShowStudyHub(true)}
+                        onWorkspaceHub={() => setShowWorkspaceHub(true)}
                         isOffline={!navigator.onLine} 
                     />
                     
@@ -1032,6 +1155,7 @@ const App: React.FC = () => {
                          setShowStudyHub(false);
                     }} />
                     <ManageAccountsModal isOpen={showAccounts} onClose={() => setShowAccounts(false)} />
+                    <WorkspaceHubPanel isOpen={showWorkspaceHub} onClose={() => setShowWorkspaceHub(false)} />
                     <SquadPanel 
                         isOpen={showSquad} 
                         onClose={() => setShowSquad(false)} 

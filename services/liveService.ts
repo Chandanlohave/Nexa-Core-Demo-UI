@@ -383,30 +383,47 @@ export class LiveSessionManager {
     setTimeout(() => { this.isStopping = false; }, 1000);
   }
 
-  public startVideo(videoEl: HTMLVideoElement) {
-      if (this.videoInterval) return;
+  public startVideo(videoEl: HTMLVideoElement, getZoom?: () => number) {
+      if (this.videoInterval) {
+          clearInterval(this.videoInterval);
+          this.videoInterval = null;
+      }
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       this.framesSent = 0;
 
       // OPTIMIZED VIDEO STREAMING: 600px width limit, 1000ms interval for stable transmission
       this.videoInterval = window.setInterval(() => {
-          if (!ctx || videoEl.paused || videoEl.ended || videoEl.videoWidth === 0) return;
-          
-          const MAX_WIDTH = 600; // Lower resolution for faster transmission
-          const scale = Math.min(1, MAX_WIDTH / videoEl.videoWidth);
-          
-          canvas.width = videoEl.videoWidth * scale;
-          canvas.height = videoEl.videoHeight * scale;
-          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-          
-          const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-          
-          if(this.sessionPromise) {
-              this.sessionPromise.then(s => {
-                  s.sendRealtimeInput({ video: { mimeType: 'image/jpeg', data: base64 } });
-                  this.framesSent++;
-              }).catch(()=>{});
+          try {
+              if (!ctx || !videoEl || videoEl.paused || videoEl.ended || !videoEl.videoWidth || videoEl.videoWidth === 0 || !videoEl.srcObject) return;
+              
+              const MAX_WIDTH = 600; // Lower resolution for faster transmission
+              const scale = Math.min(1, MAX_WIDTH / videoEl.videoWidth);
+              
+              canvas.width = videoEl.videoWidth * scale;
+              canvas.height = videoEl.videoHeight * scale;
+
+              const zoom = (getZoom ? getZoom() : 1) || 1;
+              if (zoom > 1.05) {
+                  const sw = videoEl.videoWidth / zoom;
+                  const sh = videoEl.videoHeight / zoom;
+                  const sx = (videoEl.videoWidth - sw) / 2;
+                  const sy = (videoEl.videoHeight - sh) / 2;
+                  ctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+              } else {
+                  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+              }
+              
+              const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+              
+              if(this.sessionPromise) {
+                  this.sessionPromise.then(s => {
+                      s.sendRealtimeInput({ video: { mimeType: 'image/jpeg', data: base64 } });
+                      this.framesSent++;
+                  }).catch(()=>{});
+              }
+          } catch (e) {
+              // Frame capture safely bypassed during camera flip or constraint change
           }
       }, 1000); 
   }

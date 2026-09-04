@@ -1,12 +1,11 @@
 {
-  "projectId": "mythical-sol-cdtd0",
-  "appId": "1:1020107974907:web:ffe47ce6ab002a5002285e",
-  "apiKey": "AIzaSyBwpJKGdJUWk7eQeMhFTw0-Ud4G6_5hfYU",
-  "authDomain": "mythical-sol-cdtd0.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-nexairisedition5-8d5f061d-1ae5-4b35-aa4e-3c66036e9e66",
-  "storageBucket": "mythical-sol-cdtd0.firebasestorage.app",
-  "messagingSenderId": "1020107974907",
+  "projectId": "gen-lang-client-0912907230",
+  "appId": "1:173514899402:web:a7d8458f117f019dc7d933",
+  "apiKey": "AIzaSyBub-q4lh6Wom9tlpMfrUt0WH6BOJ4Fs7E",
+  "authDomain": "gen-lang-client-0912907230.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0912907230.firebasestorage.app",
+  "messagingSenderId": "173514899402",
   "measurementId": "",
-  "oAuthClientId": "1020107974907-q7sl1r5fvjfuhksjk1a97kujell9ies5.apps.googleusercontent.com",
+  "oAuthClientId": "173514899402-btduc411c73s1r5suah3v2k8esdmle5f.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

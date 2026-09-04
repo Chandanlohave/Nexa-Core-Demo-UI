@@ -13,7 +13,8 @@
         "voice": { "type": "string" },
         "theme": { "type": "string" },
         "lastLogin": { "type": "string" },
-        "lastLoginDate": { "type": "string" }
+        "lastLoginDate": { "type": "string" },
+        "accessKey": { "type": "string" }
       },
       "required": ["name", "mobile", "role"]
     },

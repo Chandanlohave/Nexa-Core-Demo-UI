@@ -54,10 +54,10 @@ const ManageAccountsModal: React.FC<ManageAccountsModalProps> = ({ isOpen, onClo
                 <div className="text-center text-zinc-500 border border-dashed border-zinc-700 p-4">NO USER PROFILES FOUND.</div>
             ) : (
                 <div className="space-y-2">
-                    {users.map(user => {
+                    {users.map((user, idx) => {
                         const isBlocked = (user.warningCount || 0) >= 3;
                         return (
-                            <div key={user.mobile} className={`p-3 flex items-center justify-between border transition-colors duration-200 ${isBlocked ? 'bg-red-900/40 border-red-500/50' : 'bg-zinc-900/50 border-zinc-700'}`}>
+                            <div key={user.mobile ? `acc_${user.mobile}` : `usr_${idx}`} className={`p-3 flex items-center justify-between border transition-colors duration-200 ${isBlocked ? 'bg-red-900/40 border-red-500/50' : 'bg-zinc-900/50 border-zinc-700'}`}>
                                 <div>
                                     <p className={`font-bold ${isBlocked ? 'text-red-400' : 'text-white'}`}>{user.name}</p>
                                     <p className="text-xs text-zinc-400 font-mono">{user.mobile}</p>

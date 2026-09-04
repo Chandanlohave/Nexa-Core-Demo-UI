@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
-import { syncUserProfile, getUserProfile, fetchSystemConfig, verifyAdminPassword, verifyMasterAccessKey } from '../services/memoryService';
+import { syncUserProfile, getUserProfile, fetchSystemConfig, verifyAdminPassword, verifyMasterAccessKey, createCustomAccessKey } from '../services/memoryService';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, onAuthChange } from '../services/firebaseConfig';
 
 interface AuthProps {
@@ -283,10 +283,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         return;
     }
 
+    const cleanAccessKey = formData.accessKey.trim().toUpperCase();
+
     // 2. PERSIST KEYS FOR FUTURE SESSIONS
     try {
-        if (formData.accessKey.trim()) {
-            localStorage.setItem('nexa_access_key', formData.accessKey.trim());
+        if (cleanAccessKey) {
+            localStorage.setItem('nexa_access_key', cleanAccessKey);
         }
         if (formData.customApiKey.trim()) {
             localStorage.setItem('nexa_client_api_key', formData.customApiKey.trim());
@@ -313,11 +315,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
          role: UserRole.USER,
          gender: formData.gender as 'male' | 'female' | 'other',
          warningCount: 0,
-         voice: 'Kore'
+         voice: 'Kore',
+         accessKey: cleanAccessKey
     };
     
     profile.name = formData.name;
+    profile.accessKey = cleanAccessKey;
     await syncUserProfile(profile);
+
+    // Register and bind the key to this user in access_keys collection
+    if (cleanAccessKey) {
+        await createCustomAccessKey(cleanAccessKey, userId);
+    }
+
     completeLogin(profile);
   };
 

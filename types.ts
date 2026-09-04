@@ -59,6 +59,7 @@ export interface NexaAgentNode {
 }
 
 export interface UserProfile {
+  id?: string;
   name: string;
   mobile: string; // Now a mandatory unique identifier for users
   role: UserRole;
@@ -68,13 +69,17 @@ export interface UserProfile {
   photoUrl?: string; // Base64 compressed image
   voiceprintId?: string; // Biometric voiceprint hash
   voiceEnrolledAt?: number;
+  lastLoginDate?: string;
+  accessKey?: string;
 }
 
 export interface AccessKeyDefinition {
   key: string;
   assignedMobile?: string; // If set, only this mobile can use it
+  assignedName?: string; // Name of the linked user
   createdBy: string;
-  createdAt: string;
+  createdAt: any;
+  createdDate?: string;
 }
 
 export interface MapLocation {

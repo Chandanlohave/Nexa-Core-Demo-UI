@@ -1,6 +1,6 @@
 {
   "name": "Nexa Iris Edition 5.0",
-  "description": "I.R.I.S. = Intelligent Repair & Insight System\nMeaning:\nIntelligent = smart human-like thinking\nRepair = khud ko fix/repair karna\nInsight = dekhna + samajhna\nSystem = complete assistant framework",
+  "description": "Nexa IRIS - Intelligent Repair & Insight System AI Assistant",
   "requestFramePermissions": [
     "microphone",
     "camera",

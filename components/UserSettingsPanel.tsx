@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AppConfig, VOICES, VoiceKey, Reminder } from '../types';
 
@@ -15,7 +14,7 @@ interface UserSettingsPanelProps {
 }
 
 const THEME_COLORS = [
-    { name: 'Default UI', value: '#29dfff' }, // Renamed from Cyber Cyan
+    { name: 'Default UI', value: '#29dfff' }, 
     { name: 'Hyper Violet', value: '#bf00ff' },
     { name: 'Solar Orange', value: '#ff5e00' }, 
     { name: 'Neon Plasma', value: '#ff0099' },
@@ -25,7 +24,6 @@ const THEME_COLORS = [
 
 const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange, currentVoice = 'Kore', onVoiceChange, reminders = [], onDeleteReminder, onAddReminder }) => {
   const [taskInput, setTaskInput] = useState('');
-
   if (!isOpen) return null;
 
   const ThemeButton: React.FC<{label: string, value: AppConfig['theme']}> = ({ label, value }) => {
@@ -199,7 +197,6 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
                 </div>
             )}
         </div>
-
       </div>
     </div>
   );

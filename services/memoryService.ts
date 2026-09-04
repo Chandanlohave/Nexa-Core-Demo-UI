@@ -1,7 +1,7 @@
 
 import { UserProfile, UserRole, ChatMessage, StudyHubSubject, UserFact, AccessKeyDefinition } from '../types';
 import { db, storage } from './firebaseConfig';
-import { doc, setDoc, getDoc, collection, getDocs, deleteDoc, query, orderBy, limit, serverTimestamp, Timestamp, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, deleteDoc, query, orderBy, limit, serverTimestamp, Timestamp, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { GoogleGenAI } from "@google/genai";
 
@@ -11,7 +11,7 @@ const USER_ROOT_PREFIX = 'NEXA_USER_DATA_';
 
 // --- FAMILY TREE DATABASE STRUCTURE (ABSOLUTE TRUTH) ---
 export const FAMILY_TREE = {
-    creator_father: "Chandan Lohave (Admin)",
+    creator: "Chandan Lohave (Admin)",
     mother: "Darshana Lohave",
     bhabhi: "Karishma Yesankar",
     sister: "Achal Lohave",
@@ -131,7 +131,7 @@ export const syncFamilyTree = async () => {
             ...FAMILY_TREE,
             lastSynced: serverTimestamp(),
             syncedDate: formatStdDate(new Date())
-        }, { merge: true });
+        });
     } catch (e) {
         // Silent fail
     }
@@ -229,23 +229,25 @@ export const fetchSystemConfig = async () => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             
-            if (data.geminiKey && data.geminiKey.trim()) {
-                localStorage.setItem('nexa_client_api_key', data.geminiKey.trim());
-            }
-            if (data.ghToken && data.ghToken.trim()) {
-                localStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
-                sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
-            }
-            if (data.ghRepo && data.ghRepo.trim()) {
-                const cleanRepo = data.ghRepo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '').replace(/\.git$/, '');
-                localStorage.setItem('NEXA_GH_REPO', cleanRepo);
-                sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
-            }
-            if (data.adminPin && data.adminPin.trim()) {
-                localStorage.setItem('nexa_admin_pin', data.adminPin.trim());
-            }
-            if (data.accessKey && data.accessKey.trim()) {
-                localStorage.setItem('nexa_access_key', data.accessKey.trim());
+            if (typeof window !== 'undefined') {
+                if (data.geminiKey && data.geminiKey.trim()) {
+                    localStorage.setItem('nexa_client_api_key', data.geminiKey.trim());
+                }
+                if (data.ghToken && data.ghToken.trim()) {
+                    localStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
+                    sessionStorage.setItem('NEXA_GH_TOKEN', data.ghToken.trim());
+                }
+                if (data.ghRepo && data.ghRepo.trim()) {
+                    const cleanRepo = data.ghRepo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '').replace(/\.git$/, '');
+                    localStorage.setItem('NEXA_GH_REPO', cleanRepo);
+                    sessionStorage.setItem('NEXA_GH_REPO', cleanRepo);
+                }
+                if (data.adminPin && data.adminPin.trim()) {
+                    localStorage.setItem('nexa_admin_pin', data.adminPin.trim());
+                }
+                if (data.accessKey && data.accessKey.trim()) {
+                    localStorage.setItem('nexa_access_key', data.accessKey.trim());
+                }
             }
             
             return data;
@@ -270,37 +272,319 @@ export const fetchSystemConfig = async () => {
 };
 
 // --- ACCESS KEY MANAGEMENT ---
+export interface PresetKeyMapping {
+    key: string;
+    assignedMobile: string;
+    userName: string;
+}
+
+export const SYSTEM_PRESET_MAPPINGS: PresetKeyMapping[] = [
+    { key: 'ACHAL', assignedMobile: '9529736887', userName: 'Achal Lohave' },
+    { key: 'AKASH', assignedMobile: '8080810834', userName: 'Akash Dhande' },
+    { key: 'AKMT', assignedMobile: '7778822102', userName: 'Arjun Soni' },
+    { key: 'BIJAY', assignedMobile: '7558482092', userName: 'Vijay Budhathoki' },
+    { key: 'BIKAL', assignedMobile: '7385493842', userName: 'Bikal Sunar unar' },
+    { key: 'DEVA', assignedMobile: '8980941230', userName: 'Debendar Soni' },
+    { key: 'NEXA001', assignedMobile: '7350702228', userName: 'Pavan' },
+    { key: 'NEXA002', assignedMobile: '9011304170', userName: 'Ram Dhande' },
+    { key: 'NEXA2127', assignedMobile: '7499732530', userName: 'Karishma Yesankar' },
+    { key: 'PAWAN', assignedMobile: '7499261176', userName: 'Pavan Rathod' },
+    { key: 'NEXA2025', assignedMobile: '0992', userName: 'Chandan Lohave' }
+];
+
+export const SYSTEM_PRESET_KEYS = SYSTEM_PRESET_MAPPINGS.map(m => m.key);
+
 export const createCustomAccessKey = async (key: string, assignedMobile?: string) => {
     if (!key || !key.trim()) return false;
+    const cleanKey = key.trim().toUpperCase();
+    const cleanMobile = assignedMobile?.trim() || null;
+    const formattedDate = formatStdDate(new Date());
+
+    // 1. Immediate LocalStorage backup so keys are never lost even offline
     try {
-        await setDoc(doc(db, "access_keys", key.trim()), {
-            key: key.trim(),
-            assignedMobile: assignedMobile || null,
+        const localStr = localStorage.getItem('nexa_custom_access_keys');
+        const localList: AccessKeyDefinition[] = localStr ? JSON.parse(localStr) : [];
+        const filtered = localList.filter(k => k.key.toUpperCase() !== cleanKey);
+        filtered.unshift({
+            key: cleanKey,
+            assignedMobile: cleanMobile || undefined,
+            createdBy: "Admin",
+            createdAt: Date.now() as any,
+            createdDate: formattedDate
+        });
+        localStorage.setItem('nexa_custom_access_keys', JSON.stringify(filtered));
+    } catch(e) {}
+
+    // 2. Persist to Firestore cloud database
+    try {
+        await setDoc(doc(db, "access_keys", cleanKey), {
+            key: cleanKey,
+            assignedMobile: cleanMobile,
             createdBy: "Admin",
             createdAt: serverTimestamp(),
-            createdDate: formatStdDate(new Date())
-        });
+            createdDate: formattedDate
+        }, { merge: true });
+
+        // If assigned to a registered mobile user, also update their user document
+        if (cleanMobile) {
+            try {
+                await updateDoc(doc(db, "users", cleanMobile), {
+                    accessKey: cleanKey
+                });
+            } catch(e) {
+                // If updateDoc fails (e.g. user doc doesn't exist yet), set with merge
+                await setDoc(doc(db, "users", cleanMobile), {
+                    accessKey: cleanKey
+                }, { merge: true }).catch(() => {});
+            }
+        }
         return true;
     } catch (e) {
-        return false;
+        console.error("Failed to write access key to cloud database:", e);
+        return true;
     }
 };
 
 export const getAccessKeys = async (): Promise<AccessKeyDefinition[]> => {
+    let cloudKeys: AccessKeyDefinition[] = [];
     try {
         const snapshot = await getDocs(collection(db, "access_keys"));
-        return snapshot.docs.map(doc => doc.data() as AccessKeyDefinition);
+        cloudKeys = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                key: data.key || docSnap.id,
+                assignedMobile: data.assignedMobile || undefined,
+                createdBy: data.createdBy || "Admin",
+                createdAt: data.createdAt,
+                createdDate: data.createdDate || ""
+            } as AccessKeyDefinition;
+        });
     } catch (e) {
-        return [];
+        console.warn("Could not fetch access keys from cloud, checking local storage", e);
+    }
+
+    // Auto-sync: Cross-check registered users in Firestore to ensure all user access keys are indexed
+    try {
+        const usersSnap = await getDocs(collection(db, "users"));
+        usersSnap.docs.forEach(uDoc => {
+            const uData = uDoc.data();
+            if (uData.role !== 'ADMIN' && uData.accessKey && typeof uData.accessKey === 'string' && uData.accessKey.trim()) {
+                const uKey = uData.accessKey.trim().toUpperCase();
+                const existingKey = cloudKeys.find(k => k.key.toUpperCase() === uKey);
+                if (!existingKey) {
+                    const newDef: AccessKeyDefinition = {
+                        key: uKey,
+                        assignedMobile: uData.mobile || uDoc.id,
+                        createdBy: "UserSync",
+                        createdAt: uData.updatedAt || Date.now(),
+                        createdDate: uData.lastLoginDate || formatStdDate(new Date())
+                    };
+                    cloudKeys.push(newDef);
+                    setDoc(doc(db, "access_keys", uKey), {
+                        key: uKey,
+                        assignedMobile: uData.mobile || uDoc.id,
+                        createdBy: "UserSync",
+                        createdAt: serverTimestamp(),
+                        createdDate: uData.lastLoginDate || formatStdDate(new Date())
+                    }, { merge: true }).catch(() => {});
+                } else if (!existingKey.assignedMobile && (uData.mobile || uDoc.id)) {
+                    existingKey.assignedMobile = uData.mobile || uDoc.id;
+                }
+            }
+        });
+    } catch(e) {}
+
+    // Auto-sync: Ensure all system preset keys are included with their bounded users & mobiles
+    SYSTEM_PRESET_MAPPINGS.forEach(pm => {
+        const existing = cloudKeys.find(ck => ck.key.toUpperCase() === pm.key.toUpperCase());
+        if (!existing) {
+            cloudKeys.push({
+                key: pm.key,
+                assignedMobile: pm.assignedMobile,
+                assignedName: pm.userName,
+                createdBy: "Admin",
+                createdAt: Date.now() as any,
+                createdDate: formatStdDate(new Date())
+            });
+            setDoc(doc(db, "access_keys", pm.key), {
+                key: pm.key,
+                assignedMobile: pm.assignedMobile,
+                createdBy: "Admin",
+                createdAt: serverTimestamp(),
+                createdDate: formatStdDate(new Date())
+            }, { merge: true }).catch(() => {});
+        } else {
+            if (!existing.assignedMobile) {
+                existing.assignedMobile = pm.assignedMobile;
+            }
+            if (!existing.assignedName) {
+                existing.assignedName = pm.userName;
+            }
+        }
+    });
+
+    // Enrich any existing keys with preset names
+    cloudKeys.forEach(ck => {
+        const pm = SYSTEM_PRESET_MAPPINGS.find(p => p.key.toUpperCase() === ck.key.toUpperCase());
+        if (pm) {
+            if (!ck.assignedMobile) ck.assignedMobile = pm.assignedMobile;
+            if (!ck.assignedName) ck.assignedName = pm.userName;
+        }
+    });
+
+    // Merge with LocalStorage keys so offline/cached keys are recovered
+    try {
+        const localStr = localStorage.getItem('nexa_custom_access_keys');
+        if (localStr) {
+            const localKeys: AccessKeyDefinition[] = JSON.parse(localStr);
+            localKeys.forEach(lk => {
+                const pm = SYSTEM_PRESET_MAPPINGS.find(p => p.key.toUpperCase() === lk.key.toUpperCase());
+                if (pm && !lk.assignedMobile) {
+                    lk.assignedMobile = pm.assignedMobile;
+                    lk.assignedName = pm.userName;
+                }
+                if (!cloudKeys.some(ck => ck.key.toUpperCase() === lk.key.toUpperCase())) {
+                    cloudKeys.push(lk);
+                    setDoc(doc(db, "access_keys", lk.key.toUpperCase()), {
+                        key: lk.key.toUpperCase(),
+                        assignedMobile: lk.assignedMobile || null,
+                        createdBy: lk.createdBy || "Admin",
+                        createdAt: serverTimestamp(),
+                        createdDate: lk.createdDate || formatStdDate(new Date())
+                    }, { merge: true }).catch(() => {});
+                }
+            });
+        }
+        localStorage.setItem('nexa_custom_access_keys', JSON.stringify(cloudKeys));
+    } catch(e) {}
+
+    return cloudKeys;
+};
+
+export const subscribeToAccessKeys = (callback: (keys: AccessKeyDefinition[]) => void) => {
+    // Immediate callback from LocalStorage or Presets if available
+    try {
+        const local = localStorage.getItem('nexa_custom_access_keys');
+        if (local) {
+            const parsed: AccessKeyDefinition[] = JSON.parse(local);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Ensure preset bindings are accurate
+                parsed.forEach(pk => {
+                    const pm = SYSTEM_PRESET_MAPPINGS.find(p => p.key.toUpperCase() === pk.key.toUpperCase());
+                    if (pm) {
+                        pk.assignedMobile = pk.assignedMobile || pm.assignedMobile;
+                        pk.assignedName = pk.assignedName || pm.userName;
+                    }
+                });
+                callback(parsed);
+            }
+        }
+    } catch(e) {}
+
+    try {
+        const unsub = onSnapshot(collection(db, "access_keys"), (snapshot) => {
+            const cloudKeys: AccessKeyDefinition[] = snapshot.docs.map(docSnap => {
+                const data = docSnap.data();
+                const key = data.key || docSnap.id;
+                const pm = SYSTEM_PRESET_MAPPINGS.find(p => p.key.toUpperCase() === key.toUpperCase());
+                return {
+                    key: key,
+                    assignedMobile: data.assignedMobile || pm?.assignedMobile || undefined,
+                    assignedName: pm?.userName,
+                    createdBy: data.createdBy || "Admin",
+                    createdAt: data.createdAt,
+                    createdDate: data.createdDate || ""
+                } as AccessKeyDefinition;
+            });
+
+            // Ensure all presets are present
+            SYSTEM_PRESET_MAPPINGS.forEach(pm => {
+                if (!cloudKeys.some(ck => ck.key.toUpperCase() === pm.key.toUpperCase())) {
+                    cloudKeys.push({
+                        key: pm.key,
+                        assignedMobile: pm.assignedMobile,
+                        assignedName: pm.userName,
+                        createdBy: "Admin",
+                        createdAt: Date.now() as any,
+                        createdDate: formatStdDate(new Date())
+                    });
+                }
+            });
+
+            // Deduplicate keys
+            const uniqueKeys: AccessKeyDefinition[] = [];
+            const seenKeys = new Set<string>();
+            cloudKeys.forEach(k => {
+                const upper = (k.key || '').trim().toUpperCase();
+                if (upper && !seenKeys.has(upper)) {
+                    seenKeys.add(upper);
+                    uniqueKeys.push(k);
+                }
+            });
+
+            // Update local storage
+            try {
+                localStorage.setItem('nexa_custom_access_keys', JSON.stringify(uniqueKeys));
+            } catch(e) {}
+
+            callback(uniqueKeys);
+        }, (err) => {
+            console.warn("Realtime access_keys snapshot warning:", err);
+            getAccessKeys().then(callback);
+        });
+
+        return unsub;
+    } catch (e) {
+        getAccessKeys().then(callback);
+        return () => {};
+    }
+};
+
+export const subscribeToRegisteredUsers = (callback: (users: UserProfile[]) => void) => {
+    try {
+        const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
+            const seen = new Set<string>();
+            const users: UserProfile[] = [];
+            snapshot.docs.forEach(d => {
+                const data = d.data();
+                const mobile = (data.mobile || d.id || '').trim();
+                const cleanKey = mobile ? mobile.replace(/\D/g, '') || mobile : d.id;
+                if (!seen.has(cleanKey)) {
+                    seen.add(cleanKey);
+                    users.push({
+                        id: d.id,
+                        ...data
+                    } as unknown as UserProfile);
+                }
+            });
+            callback(users);
+        }, (err) => {
+            console.warn("Registered users snapshot warning:", err);
+        });
+        return unsub;
+    } catch (e) {
+        return () => {};
     }
 };
 
 export const deleteAccessKey = async (key: string) => {
     if (!key || !key.trim()) return false;
+    const cleanKey = key.trim().toUpperCase();
+
     try {
-        await deleteDoc(doc(db, "access_keys", key.trim()));
+        const localStr = localStorage.getItem('nexa_custom_access_keys');
+        if (localStr) {
+            const localKeys: AccessKeyDefinition[] = JSON.parse(localStr);
+            const filtered = localKeys.filter(k => k.key.toUpperCase() !== cleanKey);
+            localStorage.setItem('nexa_custom_access_keys', JSON.stringify(filtered));
+        }
+    } catch(e) {}
+
+    try {
+        await deleteDoc(doc(db, "access_keys", cleanKey));
         return true;
     } catch (e) {
+        console.error("Failed to delete key from Firestore:", e);
         return false;
     }
 };
@@ -308,34 +592,82 @@ export const deleteAccessKey = async (key: string) => {
 // --- SECURE MASTER ACCESS VERIFICATION ---
 export const verifyMasterAccessKey = async (inputKey: string, userMobile?: string): Promise<boolean> => {
     if (!inputKey || !inputKey.trim()) return false;
-    try {
-        const sys = await fetchSystemConfig();
-        const validMasterKey = (sys?.accessKey && sys.accessKey.length > 0) ? sys.accessKey : 'NEXA2025';
-        if (inputKey === validMasterKey) return true;
-    } catch (e) {
-        if (inputKey === 'NEXA2025') return true;
-    }
+    const cleanKey = inputKey.trim().toUpperCase();
+    const cleanUserDigits = userMobile ? userMobile.replace(/\D/g, '') : '';
 
+    // 1. Check system preset mappings (ACHAL, AKASH, AKMT, BIJAY, BIKAL, DEVA, NEXA001, NEXA002, NEXA2127, PAWAN, NEXA2025)
+    const preset = SYSTEM_PRESET_MAPPINGS.find(p => p.key.toUpperCase() === cleanKey);
+
+    // 2. Fetch doc from Firestore access_keys collection
+    let firestoreKeyData: AccessKeyDefinition | null = null;
     try {
-        const docRef = doc(db, "access_keys", inputKey.trim());
+        const docRef = doc(db, "access_keys", cleanKey);
         const docSnap = await getDoc(docRef);
-        
         if (docSnap.exists()) {
-            const data = docSnap.data() as AccessKeyDefinition;
-            if (data.assignedMobile && data.assignedMobile.length > 0) {
-                if (!userMobile) return false;
-                return data.assignedMobile === userMobile;
-            } else {
-                if (userMobile) {
-                    await setDoc(docRef, { assignedMobile: userMobile }, { merge: true });
-                    return true;
-                }
-                return true;
-            }
+            firestoreKeyData = docSnap.data() as AccessKeyDefinition;
         }
     } catch (e) {
-        console.error("Error verifying custom access key", e);
+        console.warn("Error fetching access_keys doc from Firestore:", e);
     }
+
+    // Determine the assigned mobile for this key (Firestore takes precedence, fallback to preset mapping)
+    const assignedMobile = firestoreKeyData?.assignedMobile || preset?.assignedMobile;
+    const cleanAssignedDigits = assignedMobile ? assignedMobile.replace(/\D/g, '') : '';
+
+    // 3. If the key is bounded to a mobile number:
+    if (cleanAssignedDigits.length > 0) {
+        // STRICT MOBILE VALIDATION:
+        // Must provide userMobile and it must match the bound mobile
+        if (!cleanUserDigits) {
+            return false;
+        }
+        const isMatch = (cleanUserDigits === cleanAssignedDigits) || 
+                        (cleanUserDigits.endsWith(cleanAssignedDigits)) || 
+                        (cleanAssignedDigits.endsWith(cleanUserDigits));
+        
+        if (isMatch) {
+            // Update Firestore with the user's mobile and timestamp
+            try {
+                await setDoc(doc(db, "access_keys", cleanKey), {
+                    key: cleanKey,
+                    assignedMobile: userMobile,
+                    assignedName: preset?.userName,
+                    lastUsedAt: serverTimestamp(),
+                    lastUsedMobile: userMobile
+                }, { merge: true });
+            } catch (e) {}
+            return true;
+        } else {
+            // Key is strictly bounded to a DIFFERENT mobile! User is not authorized to use this key!
+            console.warn(`Access Key ${cleanKey} is bounded to ${assignedMobile}, but attempted by ${userMobile}`);
+            return false;
+        }
+    }
+
+    // 4. If key exists in Firestore but has no assignedMobile yet (an unbounded key created by Admin):
+    if (firestoreKeyData) {
+        if (userMobile) {
+            // Bind it to the user who activates it
+            try {
+                await setDoc(doc(db, "access_keys", cleanKey), {
+                    assignedMobile: userMobile,
+                    lastUsedAt: serverTimestamp()
+                }, { merge: true });
+            } catch (e) {}
+        }
+        return true;
+    }
+
+    // 5. Check if it's the general system master key or invite code (e.g., NEXA2025)
+    try {
+        const sys = await fetchSystemConfig();
+        const validMasterKey = (sys?.accessKey && sys.accessKey.length > 0) ? sys.accessKey.toUpperCase() : null;
+        const inviteCode = (sys?.inviteCode && sys.inviteCode.length > 0) ? sys.inviteCode.toUpperCase() : 'NEXA2025';
+        
+        if (cleanKey === validMasterKey || cleanKey === inviteCode) {
+            return true;
+        }
+    } catch (e) {}
 
     return false;
 };
@@ -404,8 +736,17 @@ export const getUserProfile = async (mobile: string): Promise<UserProfile | null
 export const getAllUserProfiles = async (): Promise<UserProfile[]> => {
     try {
         const querySnapshot = await getDocs(collection(db, "users"));
+        const seen = new Set<string>();
         const users: UserProfile[] = [];
-        querySnapshot.forEach((doc) => { users.push(doc.data() as UserProfile); });
+        querySnapshot.forEach((doc) => {
+            const data = doc.data() as UserProfile;
+            const mobile = (data.mobile || doc.id || '').trim();
+            const cleanKey = mobile ? mobile.replace(/\D/g, '') || mobile : doc.id;
+            if (!seen.has(cleanKey)) {
+                seen.add(cleanKey);
+                users.push(data);
+            }
+        });
         return users;
     } catch (e) { return []; }
 };
