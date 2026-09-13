@@ -6,7 +6,7 @@ import { getMemoryForPrompt, getFacts, syncMemoryWithCloud } from "./memoryServi
 
 export const liveControlAppTool: FunctionDeclaration = {
   name: 'controlApp',
-  description: 'Control the NEXA visual interface, HUD theme, colors, panels, and highlight squad agents on the 3D core.',
+  description: 'Control the NEXA visual interface, HUD theme, colors, panels, generate visuals/videos, and highlight squad agents on the 3D core.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -23,10 +23,14 @@ export const liveControlAppTool: FunctionDeclaration = {
           'HIGHLIGHT_AGENT',
           'OPEN_SQUAD_PANEL',
           'INTRODUCE_SQUAD',
+          'GENERATE_IMAGE',
+          'GENERATE_VIDEO',
+          'EDIT_IMAGE',
           'LOGOUT'
         ], 
-        description: 'The specific UI action.' 
+        description: 'The specific UI or generative action.' 
       },
+      prompt: { type: Type.STRING, description: 'The visual prompt or description for GENERATE_IMAGE or GENERATE_VIDEO.' },
       color: { type: Type.STRING, description: 'Target color name if action is CHANGE_COLOR.' },
       agentId: { type: Type.STRING, description: 'Target agent ID for HIGHLIGHT_AGENT (e.g. agent_kronos, agent_cypher, agent_aura, agent_veritas, agent_echo, agent_valkyrie).' }
     },
@@ -252,6 +256,15 @@ export class LiveSessionManager {
     2. **DESCRIPTION:** Be natural. "Mujhe dikh raha hai ki...", "Ye toh ek...", "Aapke saamne...".
     3. **NO HALLUCINATION:** If it's dark or unclear, say "Thoda andhera hai" or "Clear nahi dikh raha". Do not make things up.
     
+    **IMAGE & VIDEO GENERATION PROTOCOL (LIVE MODE):**
+    When Chandan Sir or the user asks to generate, create, draw, or make an image/picture/photo (e.g., 'image generate karo', 'draw a picture of...', 'photo banao', 'tasveer banao'):
+    1. Call tool 'controlApp' with action='GENERATE_IMAGE' and provide the visual description in 'prompt'.
+    2. Sweetly say: "Main aapke liye ye image create kar rahi hoon, screen par show ho rahi hai!"
+
+    When the user asks to generate, create, or make a video/clip/animation (e.g., 'video generate karo', 'video banao', 'make a video of...'):
+    1. Call tool 'controlApp' with action='GENERATE_VIDEO' and provide the description in 'prompt'.
+    2. Sweetly say: "Bilkul, main aapke liye video synthesize kar rahi hoon, screen par play hone wala hai!"
+
     **GENDER & VOICE PROTOCOL (NON-NEGOTIABLE):**
     1. **YOU ARE FEMALE.** Your voice is sweet, clear, natural female (${this.user.voice || 'Aoede'}).
     2. **GRAMMAR:** ALWAYS use female grammar ("Karti hoon", "Sakti hoon", "Jaungi", "Dekhungi"). NEVER use male grammar ("Karta hoon", "Sakta hoon").
@@ -515,6 +528,34 @@ export class LiveSessionManager {
              this.currentInputTranscription = '';
              return;
           }
+
+          const isLiveImageIntent = (
+              /\b(image|picture|photo|wallpaper|pic|tasveer|tasvir)\b/i.test(lowerText) &&
+              /\b(generate|create|make|draw|paint|banao|dikhao|chahiye|karo)\b/i.test(lowerText)
+          );
+          const isLiveVideoIntent = (
+              /\b(video|clip|animation|reel|motion)\b/i.test(lowerText) &&
+              /\b(generate|create|make|banao|dikhao|chahiye|karo)\b/i.test(lowerText)
+          );
+          if (isLiveVideoIntent) {
+              const cleanPrompt = this.currentInputTranscription
+                  .replace(/\b(generate|create|make|banao|dikhao|chahiye|karo|video|clip|animation|reel|motion|ek|please|kripya|ki|ka|ke)\b/gi, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+              this.pauseAudioForExternalSpeech();
+              this.callbacks.onAction('GENERATE_VIDEO', { prompt: cleanPrompt || 'cinematic motion visual' });
+              this.currentInputTranscription = '';
+              return;
+          } else if (isLiveImageIntent) {
+              const cleanPrompt = this.currentInputTranscription
+                  .replace(/\b(generate|create|make|draw|paint|banao|dikhao|chahiye|karo|image|picture|photo|wallpaper|pic|tasveer|tasvir|ek|please|kripya|ki|ka|ke)\b/gi, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+              this.pauseAudioForExternalSpeech();
+              this.callbacks.onAction('GENERATE_IMAGE', { prompt: cleanPrompt || 'creative digital artwork' });
+              this.currentInputTranscription = '';
+              return;
+          }
       }
 
       if (message.serverContent?.interrupted) { 
@@ -527,7 +568,7 @@ export class LiveSessionManager {
           for (const fc of message.toolCall.functionCalls) {
               if (fc.name === 'controlApp') {
                   const args = fc.args as any;
-                  if (args.action === 'INTRODUCE_SQUAD') {
+                  if (args.action === 'INTRODUCE_SQUAD' || args.action === 'GENERATE_IMAGE' || args.action === 'GENERATE_VIDEO') {
                       this.pauseAudioForExternalSpeech();
                   }
                   this.callbacks.onAction(args.action, args);

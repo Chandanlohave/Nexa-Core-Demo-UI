@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -12,7 +13,19 @@ export default defineConfig(({ mode }) => {
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'lucide-react'],
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'lucide-react',
+        '@google/genai',
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        'firebase/storage'
+      ],
     },
     // Define process.env to make environment variables available in the client-side code
     define: {

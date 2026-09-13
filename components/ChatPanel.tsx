@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { Download, Maximize2, X } from 'lucide-react';
 import { ChatMessage, UserRole, HUDState } from '../types';
 
 interface ChatPanelProps {
@@ -190,6 +191,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
   const scrollRef = useRef<HTMLDivElement>(null);
   const isLive = hudState === HUDState.LIVE;
   const showLiveTranscription = isLive && (inputTranscription || outputTranscription);
+  const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video'; title?: string } | null>(null);
+
+  const downloadMedia = (url: string, filename: string) => {
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Download failed:", e);
+      window.open(url, '_blank');
+    }
+  };
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
@@ -279,15 +295,106 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
             <div key={msg.timestamp + idx} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-slide-up`}>
               <div className={`relative max-w-[90%] sm:max-w-[85%] px-4 py-3 rounded-lg ${isUser ? 'bg-nexa-blue/10 border-r-2 border-nexa-blue/50' : 'bg-zinc-800/30 border-l-2 border-nexa-cyan/50'}`}>
                 
+                {/* Specialist Agent Badge */}
+                {msg.agentName && (
+                  <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-zinc-700/50">
+                    <span 
+                      className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5"
+                      style={{ 
+                        backgroundColor: `${msg.agentColor || '#00e5ff'}20`, 
+                        color: msg.agentColor || '#00e5ff', 
+                        border: `1px solid ${msg.agentColor || '#00e5ff'}60` 
+                      }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: msg.agentColor || '#00e5ff' }} />
+                      {msg.agentName}
+                    </span>
+                    {msg.agentRole && (
+                      <span className="text-[10px] text-zinc-400 font-mono truncate hidden sm:inline">
+                        {msg.agentRole}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {msg.video && (
-                    <div className="mb-3 rounded-lg overflow-hidden border border-purple-500/50 shadow-md">
-                        <video src={msg.video} autoPlay loop muted playsInline className="w-full object-cover" />
+                    <div className="mb-3 rounded-xl overflow-hidden border border-purple-500/50 shadow-lg bg-black relative group">
+                        <video src={msg.video} autoPlay loop controls playsInline className="w-full max-h-80 object-contain" />
+                        <div className="p-2.5 bg-zinc-950/95 border-t border-purple-500/30 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-mono text-purple-300 font-bold flex items-center gap-1.5">
+                                🎬 MOTION VIDEO SYNTHESIS
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setSelectedMedia({ url: msg.video!, type: 'video', title: msg.text })}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-purple-300 text-xs font-mono border border-purple-500/30 cursor-pointer"
+                                    title="Fullscreen"
+                                >
+                                    <Maximize2 className="w-3.5 h-3.5" /> Fullscreen
+                                </button>
+                                <button
+                                    onClick={() => downloadMedia(msg.video!, `nexa-video-${msg.timestamp}.mp4`)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-400 text-black text-xs font-mono font-bold shadow transition-all cursor-pointer"
+                                >
+                                    <Download className="w-3.5 h-3.5" /> Download
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 
                 {msg.image && (
-                    <div className="mb-3 rounded-lg overflow-hidden border border-nexa-cyan/30 shadow-md">
-                        <img src={msg.image} alt="Content" className="w-full object-cover" />
+                    <div className="mb-3 rounded-xl overflow-hidden border border-cyan-500/50 shadow-lg bg-black/60 relative group">
+                        <img 
+                            src={msg.image} 
+                            alt="Content" 
+                            className="w-full max-h-96 object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                            onClick={() => setSelectedMedia({ url: msg.image!, type: 'image', title: msg.text })}
+                        />
+                        <div className="p-2.5 bg-zinc-950/95 border-t border-cyan-500/30 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-mono text-cyan-300 font-bold flex items-center gap-1.5">
+                                🖼️ AI SYNTHESIS ARTWORK
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setSelectedMedia({ url: msg.image!, type: 'image', title: msg.text })}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-cyan-300 text-xs font-mono border border-cyan-500/30 cursor-pointer"
+                                    title="Zoom"
+                                >
+                                    <Maximize2 className="w-3.5 h-3.5" /> Zoom
+                                </button>
+                                <button
+                                    onClick={() => downloadMedia(msg.image!, `nexa-image-${msg.timestamp}.jpg`)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black text-xs font-mono font-bold shadow transition-all cursor-pointer"
+                                >
+                                    <Download className="w-3.5 h-3.5" /> Download
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {msg.pdf && (
+                    <div className="mb-3 flex items-center gap-2.5 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs font-mono text-red-300">
+                        <svg className="w-5 h-5 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <div className="truncate">
+                            <div className="font-semibold text-white truncate">{msg.pdf.name}</div>
+                            <div className="text-[10px] text-zinc-400">PDF Document {msg.pdf.size ? `• ${(msg.pdf.size / 1024).toFixed(1)} KB` : ''}</div>
+                        </div>
+                    </div>
+                )}
+
+                {msg.fileInfo && msg.fileInfo.type !== 'image' && msg.fileInfo.type !== 'pdf' && (
+                    <div className="mb-3 flex items-center gap-2.5 px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-xs font-mono text-cyan-300">
+                        <svg className="w-5 h-5 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div className="truncate">
+                            <div className="font-semibold text-white truncate">{msg.fileInfo.name}</div>
+                            <div className="text-[10px] text-zinc-400">{msg.fileInfo.type.toUpperCase()} File</div>
+                        </div>
                     </div>
                 )}
 
@@ -369,6 +476,47 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
             </div>
         )}
       </div>
+
+      {/* FULLSCREEN MEDIA LIGHTBOX MODAL */}
+      {selectedMedia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-zinc-950 border border-cyan-500/40 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(6,182,212,0.3)]">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900/60">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-cyan-400 font-bold uppercase">
+                  {selectedMedia.type === 'video' ? '🎬 Motion Video Player' : '🖼️ High-Definition Canvas'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadMedia(selectedMedia.url, selectedMedia.type === 'video' ? `nexa-video-${Date.now()}.mp4` : `nexa-image-${Date.now()}.jpg`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-black text-xs font-mono font-bold shadow transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download HD
+                </button>
+                <button
+                  onClick={() => setSelectedMedia(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-black/80">
+              {selectedMedia.type === 'video' ? (
+                <video src={selectedMedia.url} autoPlay loop controls playsInline className="max-w-full max-h-[70vh] rounded-lg object-contain shadow-2xl" />
+              ) : (
+                <img src={selectedMedia.url} alt="HD Visual Preview" className="max-w-full max-h-[70vh] rounded-lg object-contain shadow-2xl" />
+              )}
+            </div>
+            {selectedMedia.title && (
+              <div className="p-3 border-t border-zinc-800/80 bg-zinc-900/40 text-xs font-mono text-zinc-400 truncate">
+                {selectedMedia.title}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

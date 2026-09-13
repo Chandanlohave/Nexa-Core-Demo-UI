@@ -1,8 +1,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // 1. User Profiles & Individual User Data
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.name is string 
+                            && request.resource.data.name.size() > 0 
+                            && request.resource.data.name.size() < 100;
+      // Prohibit arbitrary deletion of user accounts
+      allow delete: if false;
+      
+      // User Chats Subcollection
+      match /chats/{chatId} {
+        allow read: if true;
+        allow create, update: if request.resource.data.text is string;
+        allow delete: if false;
+      }
+    }
+
+    // 2. Access Keys Collection (Gatekeeper)
+    match /access_keys/{keyId} {
+      allow get: if true;
+      allow list: if true;
+      allow create, update: if request.resource.data.key is string 
+                            && request.resource.data.key.size() > 0;
+      // Prevent hackers from deleting access keys
+      allow delete: if false;
+    }
+
+    // 3. System Configuration (Nexa Core System Data)
+    match /system/config {
+      allow read: if true;
+      allow create, update: if request.resource.data != null;
+      // Prohibit wiping out the core configuration
+      allow delete: if false;
+    }
+
+    // 4. System Documents (Calendar Events, Superpowers, Trending Models, Family Tree)
+    match /system/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
+    // 5. Security Incidents / Cyber Threat Audit Logs
+    match /security_incidents/{incidentId} {
+      allow read: if true;
+      allow create: if request.resource.data.threat is string;
+      // Audit records are immutable: cannot be modified or erased by an attacker
+      allow update, delete: if false;
+    }
+
+    // Default Fallback: Block all unspecified paths
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

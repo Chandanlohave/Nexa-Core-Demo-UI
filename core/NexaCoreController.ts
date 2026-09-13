@@ -1,5 +1,5 @@
 import { UserProfile, AppConfig, HUDState, ChatMessage, ActionType } from '../types';
-import { generateTextResponse } from '../services/geminiService';
+import { generateTextResponse, generateImageContent, generateVideoContent } from '../services/geminiService';
 import { appendMessageToMemory } from '../services/memoryService';
 import { identifyTargetFile, fetchFileContent, generateCodePatch, pushToGithub } from '../services/githubService';
 import { recordInteractionEvolution } from '../services/evolutionService';
@@ -10,13 +10,17 @@ import {
   commitAutonomousEvolutionToGithub,
   TrendingAITarget
 } from '../services/autonomousSyncService';
+import { planTaskDistribution, executeAgentTask, AgentSpec } from '../services/agentOrchestrator';
 
 export interface NexaCoreCallbacks {
     onStateChange: (state: HUDState) => void;
     onMessageAdded: (msg: ChatMessage) => void;
     onSpeak: (text: string) => Promise<void>;
+    onSpeakAgent?: (agent: AgentSpec, text: string) => Promise<void>;
+    onAgentHighlight?: (agentId: string | null) => void;
     onAction: (action: ActionType, params: any) => void;
     onReloadRequested: () => void;
+    onShowChat?: (show: boolean) => void;
 }
 
 export const MODIFIABLE_FILES = [
@@ -77,29 +81,198 @@ export class NexaCoreController {
         this.config = config;
     }
 
-    public async processUserInput(text: string, file: { name: string; type: 'image' | 'text'; data: string; mimeType?: string } | null) {
+    public async processUserInput(text: string, file: { name: string; type: 'image' | 'text' | 'pdf'; data: string; mimeType?: string } | null) {
         if (!this.user) return;
         this.callbacks.onStateChange(HUDState.THINKING);
         
         let displayImage = undefined;
-        if (file && file.type === 'image') {
-            displayImage = `data:${file.mimeType || 'image/jpeg'};base64,${file.data}`;
+        let pdfInfo = undefined;
+        let fileInfo = undefined;
+
+        if (file) {
+            fileInfo = { name: file.name, type: file.type, size: file.data?.length };
+            if (file.type === 'image') {
+                displayImage = `data:${file.mimeType || 'image/jpeg'};base64,${file.data}`;
+            } else if (file.type === 'pdf') {
+                pdfInfo = { name: file.name, size: file.data?.length };
+            }
         }
         
         let displayText = text;
         if (file && file.type === 'text') {
             displayText += `\n[Attached: ${file.name}]`;
+        } else if (file && file.type === 'pdf') {
+            displayText = displayText ? `${displayText}\n[Attached PDF: ${file.name}]` : `[Attached PDF: ${file.name}]`;
         }
 
-        const userMsg: ChatMessage = { role: 'user', text: displayText, timestamp: Date.now(), image: displayImage };
+        const userMsg: ChatMessage = { 
+            role: 'user', 
+            text: displayText, 
+            timestamp: Date.now(), 
+            image: displayImage, 
+            pdf: pdfInfo,
+            fileInfo: fileInfo
+        };
         this.callbacks.onMessageAdded(userMsg);
         appendMessageToMemory(this.user, userMsg);
         
         const startTime = Date.now();
         try {
+            // Check for Agent task distribution first (if no file is attached)
+            if (!file) {
+                const plan = planTaskDistribution(text);
+                if (plan.type === 'SINGLE_AGENT' && plan.primaryAgent) {
+                    this.callbacks.onShowChat?.(true);
+                    this.callbacks.onAgentHighlight?.(plan.primaryAgent.id);
+                    this.callbacks.onStateChange(HUDState.SPEAKING);
+                    if (plan.announcement) {
+                        await this.callbacks.onSpeak(plan.announcement);
+                    }
+                    this.callbacks.onStateChange(HUDState.THINKING);
+                    const agentResult = await executeAgentTask(plan.primaryAgent, text, this.user);
+                    
+                    const agentMsg: ChatMessage = {
+                        role: 'model',
+                        text: agentResult.text,
+                        timestamp: Date.now(),
+                        image: agentResult.image,
+                        video: agentResult.video,
+                        isGenerated: agentResult.isGenerated,
+                        agentId: plan.primaryAgent.id,
+                        agentName: plan.primaryAgent.name,
+                        agentRole: plan.primaryAgent.role,
+                        agentColor: plan.primaryAgent.color
+                    };
+                    this.callbacks.onMessageAdded(agentMsg);
+                    appendMessageToMemory(this.user, agentMsg);
+
+                    if (agentResult.image || agentResult.video) {
+                        this.callbacks.onAction(agentResult.video ? 'GENERATE_VIDEO' : 'GENERATE_IMAGE', {
+                            prompt: text,
+                            image: agentResult.image,
+                            video: agentResult.video
+                        });
+                    }
+
+                    this.callbacks.onStateChange(HUDState.SPEAKING);
+                    const excerpt = agentResult.text.split('\n')[0]?.slice(0, 220) || `${plan.primaryAgent.name} execution complete.`;
+                    if (this.callbacks.onSpeakAgent) {
+                        await this.callbacks.onSpeakAgent(plan.primaryAgent, excerpt);
+                    } else {
+                        await this.callbacks.onSpeak(excerpt);
+                    }
+                    this.callbacks.onAgentHighlight?.(null);
+                    this.callbacks.onStateChange(HUDState.IDLE);
+                    return;
+                } else if (plan.type === 'MULTI_AGENT_SWARM' && plan.swarmAgents) {
+                    this.callbacks.onShowChat?.(true);
+                    this.callbacks.onStateChange(HUDState.SPEAKING);
+                    
+                    const introMsg: ChatMessage = {
+                        role: 'model',
+                        text: plan.announcement,
+                        timestamp: Date.now()
+                    };
+                    this.callbacks.onMessageAdded(introMsg);
+                    appendMessageToMemory(this.user, introMsg);
+                    await this.callbacks.onSpeak(plan.announcement);
+
+                    for (const agent of plan.swarmAgents) {
+                        this.callbacks.onAgentHighlight?.(agent.id);
+                        this.callbacks.onStateChange(HUDState.THINKING);
+                        const agentResult = await executeAgentTask(agent, text, this.user);
+
+                        const agentMsg: ChatMessage = {
+                            role: 'model',
+                            text: agentResult.text,
+                            timestamp: Date.now(),
+                            image: agentResult.image,
+                            video: agentResult.video,
+                            isGenerated: agentResult.isGenerated,
+                            agentId: agent.id,
+                            agentName: agent.name,
+                            agentRole: agent.role,
+                            agentColor: agent.color
+                        };
+                        this.callbacks.onMessageAdded(agentMsg);
+                        appendMessageToMemory(this.user, agentMsg);
+
+                        if (agentResult.image || agentResult.video) {
+                            this.callbacks.onAction(agentResult.video ? 'GENERATE_VIDEO' : 'GENERATE_IMAGE', {
+                                prompt: text,
+                                image: agentResult.image,
+                                video: agentResult.video
+                            });
+                        }
+
+                        this.callbacks.onStateChange(HUDState.SPEAKING);
+                        const spokenExcerpt = agentResult.text.split('\n')[0]?.slice(0, 180) || `${agent.name} status report delivered.`;
+                        if (this.callbacks.onSpeakAgent) {
+                            await this.callbacks.onSpeakAgent(agent, spokenExcerpt);
+                        } else {
+                            await this.callbacks.onSpeak(spokenExcerpt);
+                        }
+                    }
+                    this.callbacks.onAgentHighlight?.(null);
+                    this.callbacks.onStateChange(HUDState.IDLE);
+                    return;
+                }
+            }
+
             const response = await generateTextResponse(text, this.user, this.config.naughtyModeOverride, file || undefined);
             const latency = Date.now() - startTime;
             recordInteractionEvolution(true, latency);
+
+            if (response.action === 'GENERATE_IMAGE') {
+                this.callbacks.onShowChat?.(true);
+                this.callbacks.onAgentHighlight?.('agent_aura');
+                const prompt = response.actionParams?.prompt || text;
+                
+                // Immediately add a message to the chat
+                const modelMsg: ChatMessage = { 
+                    role: 'model', 
+                    text: response.text || `Maine aapke liye "${prompt}" ki image generate kar di hai!`, 
+                    timestamp: Date.now(), 
+                    isGenerated: true,
+                    agentId: 'agent_aura',
+                    agentName: 'AURA',
+                    agentRole: 'Multimodal Vision AI',
+                    agentColor: '#A855F7'
+                };
+                this.callbacks.onMessageAdded(modelMsg);
+                appendMessageToMemory(this.user, modelMsg);
+
+                // Run generation in background
+                this.executeAction('GENERATE_IMAGE', { prompt, messageId: modelMsg.timestamp });
+                
+                await this.callbacks.onSpeak("Main aapke liye image create kar rahi hoon, bas ek second...");
+                return;
+            }
+
+            if (response.action === 'GENERATE_VIDEO') {
+                this.callbacks.onShowChat?.(true);
+                this.callbacks.onAgentHighlight?.('agent_aura');
+                const prompt = response.actionParams?.prompt || text;
+                
+                const modelMsg: ChatMessage = { 
+                    role: 'model', 
+                    text: response.text || `Maine aapke liye "${prompt}" ka motion video generate kar diya hai!`, 
+                    timestamp: Date.now(), 
+                    isGenerated: true,
+                    agentId: 'agent_aura',
+                    agentName: 'AURA',
+                    agentRole: 'Multimodal Vision AI',
+                    agentColor: '#A855F7'
+                };
+                this.callbacks.onMessageAdded(modelMsg);
+                appendMessageToMemory(this.user, modelMsg);
+
+                this.executeAction('GENERATE_VIDEO', { prompt, messageId: modelMsg.timestamp });
+                
+                await this.callbacks.onSpeak("Main aapke liye motion video synthesize kar rahi hoon...");
+                return;
+            }
+
             if (response.action && response.action !== 'NONE') {
                 this.executeAction(response.action as ActionType, response.actionParams);
             }
@@ -218,6 +391,102 @@ export class NexaCoreController {
                         this.callbacks.onStateChange(HUDState.IDLE);
                     }
                 }, 100);
+                break;
+
+            case 'GENERATE_IMAGE':
+                this.callbacks.onShowChat?.(true);
+                this.callbacks.onAgentHighlight?.('agent_aura');
+                this.callbacks.onStateChange(HUDState.GENERATING);
+                setTimeout(async () => {
+                    try {
+                        const prompt = params?.prompt || 'creative digital artwork';
+                        if (!params?.messageId) {
+                            await this.callbacks.onSpeak("Main image generate kar rahi hoon, ek second...");
+                        }
+                        const img = params?.image || await generateImageContent(prompt);
+                        if (img) {
+                            const msg: ChatMessage = {
+                                role: 'model',
+                                text: params?.messageId ? `Here is your generated image:` : `Maine aapke liye "${prompt}" ki image generate kar di hai!`,
+                                timestamp: Date.now(),
+                                image: img,
+                                isGenerated: true,
+                                agentId: 'agent_aura',
+                                agentName: 'AURA',
+                                agentRole: 'Multimodal Vision AI',
+                                agentColor: '#A855F7'
+                            };
+                            this.callbacks.onMessageAdded(msg);
+                            const activeUser = this.user || (() => {
+                                try {
+                                    const u = localStorage.getItem('nexa_user');
+                                    return u ? JSON.parse(u) : null;
+                                } catch(e) { return null; }
+                            })();
+                            if (activeUser) {
+                                appendMessageToMemory(activeUser, msg);
+                            }
+                            if (!params?.messageId) {
+                                await this.callbacks.onSpeak("Aapki image screen par show ho gayi hai!");
+                            } else {
+                                await this.callbacks.onSpeak("Image screen par aa gayi hai, check karein.");
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Image action error:", err);
+                    } finally {
+                        this.callbacks.onAgentHighlight?.(null);
+                        this.callbacks.onStateChange(HUDState.IDLE);
+                    }
+                }, 50);
+                break;
+
+            case 'GENERATE_VIDEO':
+                this.callbacks.onShowChat?.(true);
+                this.callbacks.onAgentHighlight?.('agent_aura');
+                this.callbacks.onStateChange(HUDState.GENERATING);
+                setTimeout(async () => {
+                    try {
+                        const prompt = params?.prompt || 'cinematic motion visual';
+                        if (!params?.messageId) {
+                            await this.callbacks.onSpeak("Main aapke liye motion video create kar rahi hoon...");
+                        }
+                        const vid = params?.video || await generateVideoContent(prompt);
+                        if (vid) {
+                            const msg: ChatMessage = {
+                                role: 'model',
+                                text: params?.messageId ? `Here is your generated video:` : `Maine aapke liye "${prompt}" ka motion video generate kar diya hai!`,
+                                timestamp: Date.now(),
+                                video: vid,
+                                isGenerated: true,
+                                agentId: 'agent_aura',
+                                agentName: 'AURA',
+                                agentRole: 'Multimodal Vision AI',
+                                agentColor: '#A855F7'
+                            };
+                            this.callbacks.onMessageAdded(msg);
+                            const activeUser = this.user || (() => {
+                                try {
+                                    const u = localStorage.getItem('nexa_user');
+                                    return u ? JSON.parse(u) : null;
+                                } catch(e) { return null; }
+                            })();
+                            if (activeUser) {
+                                appendMessageToMemory(activeUser, msg);
+                            }
+                            if (!params?.messageId) {
+                                await this.callbacks.onSpeak("Aapka video ready ho gaya hai, screen par dekhiye!");
+                            } else {
+                                await this.callbacks.onSpeak("Aapka video screen par aa gaya hai.");
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Video action error:", err);
+                    } finally {
+                        this.callbacks.onAgentHighlight?.(null);
+                        this.callbacks.onStateChange(HUDState.IDLE);
+                    }
+                }, 50);
                 break;
 
             default:

@@ -4,6 +4,7 @@ import { UserProfile, UserRole } from '../types';
 import { playStartupSound, playUserLoginSound, playAdminLoginSound, playErrorSound } from '../services/audioService';
 import InstallPWAButton from './InstallPWAButton';
 import { syncUserProfile, getUserProfile, fetchSystemConfig, verifyAdminPassword, verifyMasterAccessKey, createCustomAccessKey } from '../services/memoryService';
+import { issueAdminSessionToken } from '../services/securityGuardService';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, onAuthChange } from '../services/firebaseConfig';
 import { testGeminiApiKey, testGroqApiKey } from '../services/geminiService';
 
@@ -251,12 +252,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     const isValid = await verifyAdminPassword(formData.password);
     
     if (isValid) {
+      // Issue cryptographic session token
+      await issueAdminSessionToken('admin_001');
       try { await fetchSystemConfig(); } catch (e) { console.warn("Failed to auto-fetch config", e); }
       let adminProfile: UserProfile = { name: 'Chandan', mobile: 'admin_001', role: UserRole.ADMIN, gender: 'male', warningCount: 0, voice: 'Kore' };
       try {
         const cloudProfile = await Promise.race([
           getUserProfile('admin_001'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]);
         if (cloudProfile && (cloudProfile as UserProfile).name) {
           adminProfile = { ...adminProfile, ...(cloudProfile as UserProfile) };

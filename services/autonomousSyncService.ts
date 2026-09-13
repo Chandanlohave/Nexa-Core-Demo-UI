@@ -290,7 +290,7 @@ export const scanInternetForTrendingAI = async (): Promise<{
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
@@ -454,7 +454,7 @@ export const synthesizeSkillSuperpower = async (target: TrendingAITarget): Promi
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"

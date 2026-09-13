@@ -42,7 +42,7 @@ export const fetchLiveWebIntelligence = async (query: string): Promise<WebIntelR
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
@@ -136,7 +136,7 @@ export const scanPublicGithubRepository = async (repoInput: string): Promise<Rep
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -207,7 +207,7 @@ export const auditCodeSnippetSecurity = async (codeSnippet: string, language: st
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"

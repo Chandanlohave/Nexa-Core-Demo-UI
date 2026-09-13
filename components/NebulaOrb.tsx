@@ -77,7 +77,7 @@ interface NebulaOrbProps {
   onResetZoom?: () => void;
 }
 
-export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
+const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
   state,
   rotationSpeed = 1,
   audioRef,
@@ -1264,6 +1264,9 @@ export const NebulaOrb: React.FC<NebulaOrbProps> = React.memo(({
       <canvas ref={canvasRef} className="block w-full h-full pointer-events-auto" />
     </div>
   );
-});
+};
+
+export const NebulaOrb = React.memo(NebulaOrbComponent);
+NebulaOrb.displayName = 'NebulaOrb';
 
 export default NebulaOrb;

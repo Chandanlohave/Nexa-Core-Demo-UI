@@ -28,7 +28,7 @@ const lerp = (start: number, end: number, factor: number) => {
 };
 
 // Memoized Classic HUD Canvas
-const ClassicHUD: React.FC<{
+const ClassicHUDComponent: React.FC<{
   state: HUDState;
   rotationSpeed?: number;
   audioRef?: React.MutableRefObject<{ vol: number, bass: number, mid: number, treble: number } | null>;
@@ -36,7 +36,7 @@ const ClassicHUD: React.FC<{
   ecoMode?: boolean;
   gestureData?: GestureData;
   onResetZoom?: () => void;
-}> = React.memo(({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false, gestureData, onResetZoom }) => {
+}> = ({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false, gestureData, onResetZoom }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -577,10 +577,13 @@ const ClassicHUD: React.FC<{
         <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
-});
+};
+
+const ClassicHUD = React.memo(ClassicHUDComponent);
+ClassicHUD.displayName = 'ClassicHUD';
 
 // Master HUD Component routing cleanly between 3D Nebula Orb and Classic HUD
-const HUD: React.FC<HUDProps> = React.memo(({
+const HUDComponent: React.FC<HUDProps> = ({
   state,
   rotationSpeed = 1,
   audioRef,
@@ -621,6 +624,9 @@ const HUD: React.FC<HUDProps> = React.memo(({
       onResetZoom={onResetZoom}
     />
   );
-});
+};
+
+const HUD = React.memo(HUDComponent);
+HUD.displayName = 'HUD';
 
 export default HUD;

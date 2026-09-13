@@ -7,8 +7,8 @@ import { runMultiAgentCodeAudit } from "./agentAuditEngine";
 const GITHUB_API_BASE = "https://api.github.com";
 
 // --- MODELS CONFIGURATION ---
-const CODE_GEN_MODEL = "gemini-3.7-flash";   // Model for code generation
-const ROUTING_MODEL = "gemini-3.7-flash"; // Model for file identification
+const CODE_GEN_MODEL = "gemini-2.5-flash";   // Model for code generation
+const ROUTING_MODEL = "gemini-2.5-flash"; // Model for file identification
 
 // --- UNICODE SAFE BASE64 HELPERS ---
 function utf8ToBase64(str: string): string {

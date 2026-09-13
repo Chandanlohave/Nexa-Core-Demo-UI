@@ -144,7 +144,7 @@ export const triggerActiveEvolutionCycle = async (user?: UserProfile | null): Pr
     `;
 
     const res = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"

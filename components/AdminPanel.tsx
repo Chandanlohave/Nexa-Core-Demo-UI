@@ -108,15 +108,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   useEffect(() => {
       if (isOpen) {
           setEvolutionMetric(getEvolutionState());
-          if (user) {
-              setCurrentUser(user);
-          } else {
+          let activeUser = user;
+          if (!activeUser) {
               const stored = localStorage.getItem('nexa_user');
               if (stored) {
-                  try { setCurrentUser(JSON.parse(stored)); } catch(e) {}
+                  try { activeUser = JSON.parse(stored); } catch(e) {}
               }
           }
+          if (activeUser) setCurrentUser(activeUser);
           
+          // Force Cloud Sync for Biometrics
+          const mobileToFetch = activeUser?.mobile || (activeUser?.role === 'ADMIN' ? 'admin_001' : null);
+          if (mobileToFetch) {
+              getUserProfile(mobileToFetch).then(cloudProfile => {
+                  if (cloudProfile && (cloudProfile.photoUrl || cloudProfile.voiceprintId)) {
+                      setCurrentUser(prev => {
+                          const updated = { ...(prev || activeUser), ...cloudProfile } as UserProfile;
+                          localStorage.setItem('nexa_user', JSON.stringify(updated));
+                          onUserUpdate?.(updated);
+                          return updated;
+                      });
+                  }
+              }).catch(() => {});
+          }
+
           // Cloud Sync Check on Open
           fetchSystemConfig().then(data => {
               if (data) {

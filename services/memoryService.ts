@@ -4,6 +4,7 @@ import { db, storage } from './firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, deleteDoc, query, orderBy, limit, serverTimestamp, Timestamp, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { GoogleGenAI } from "@google/genai";
+import { computeSha256 } from './securityGuardService';
 
 // New Folder Structure Logic
 const ADMIN_ROOT = 'NEXA_ADMIN_DATA';
@@ -676,14 +677,19 @@ export const verifyAdminPassword = async (input: string): Promise<boolean> => {
     try {
         const sys = await fetchSystemConfig();
         if (sys && sys.adminPin && sys.adminPin.length > 0) {
-             return input === sys.adminPin;
+             return input.trim() === sys.adminPin.trim();
         }
     } catch (e) {
         // Silent
     }
     const normalized = input.trim();
-    return normalized === 'NEXA' || normalized === 'Nexa' || normalized === '2127 Admin' || normalized === '2127'; 
-}
+    const hash = await computeSha256(normalized);
+    // Cryptographic SHA-256 checks for authorized pins (prevents plaintext passwords in JS bundle)
+    // '06ceef9715535b739e13f0eff2d08f2a4d57b537aaa549facff529eaa2af02d0' = sha256('2127')
+    // 'f097caa1bcbd21ff7d7ee349ce8dbe49ded730ddae16beb1b73f4d782958ef28' = sha256('2127 Admin')
+    return hash === '06ceef9715535b739e13f0eff2d08f2a4d57b537aaa549facff529eaa2af02d0' || 
+           hash === 'f097caa1bcbd21ff7d7ee349ce8dbe49ded730ddae16beb1b73f4d782958ef28';
+};
 
 // --- User Profile ---
 export const syncUserProfile = async (user: UserProfile): Promise<void> => {
@@ -713,7 +719,7 @@ export const syncUserProfile = async (user: UserProfile): Promise<void> => {
 
         await setDoc(doc(db, "users", user.mobile), userPayload, { merge: true });
     } catch (e) {
-        // Silent
+        console.error("syncUserProfile Firestore Error:", e);
     }
 };
 
@@ -838,9 +844,34 @@ export const appendMessageToMemory = async (user: UserProfile, message: ChatMess
     const key = getStorageKey(user, 'history');
     const currentMessages = getLocalMessages(user);
     currentMessages.push(message);
-    try {
-        localStorage.setItem(key, JSON.stringify(currentMessages));
-    } catch (e) { console.warn("Local storage limit reached", e); }
+
+    const safePersist = (msgs: ChatMessage[]) => {
+        try {
+            localStorage.setItem(key, JSON.stringify(msgs));
+        } catch (err) {
+            // Quota reached: strip heavy base64 data URLs from older messages while preserving text, pdf, fileInfo
+            try {
+                const streamlined = msgs.map((m, idx) => {
+                    if (idx < msgs.length - 3 && m.image && m.image.startsWith('data:')) {
+                        return { ...m, image: undefined };
+                    }
+                    return m;
+                });
+                localStorage.setItem(key, JSON.stringify(streamlined));
+            } catch (err2) {
+                try {
+                    const compact = msgs.slice(-30).map(m => ({
+                        ...m,
+                        image: (m.image && m.image.length < 5000) ? m.image : undefined
+                    }));
+                    localStorage.setItem(key, JSON.stringify(compact));
+                } catch (err3) {
+                    console.error("Critical: Could not persist local history", err3);
+                }
+            }
+        }
+    };
+    safePersist(currentMessages);
 
     if (!navigator.onLine) return;
 
@@ -884,17 +915,78 @@ export const appendMessageToMemory = async (user: UserProfile, message: ChatMess
 };
 
 export const getMemoryForPrompt = async (user: UserProfile): Promise<{role: 'user' | 'model', parts: {text: string}[]}[]> => {
-    // This now fetches up to 5000 messages via syncMemoryWithCloud
-    let history = await syncMemoryWithCloud(user);
-    return history.map(msg => {
-        let content = msg.text || "";
-        if (msg.image) content += " [VISUAL CONTEXT: User sent an image in previous message. I can see it in memory.]";
-        if (msg.video) content += " [VIDEO CONTEXT: User generated/sent a video.]";
-        return {
-            role: msg.role,
-            parts: [{ text: content }]
-        };
-    });
+    // 1. Instantly retrieve local messages to avoid blocking on cloud roundtrips
+    let history: ChatMessage[] = getLocalMessages(user);
+    if (!history || history.length === 0) {
+        history = await syncMemoryWithCloud(user);
+    } else {
+        // Silently sync cloud in background
+        syncMemoryWithCloud(user).catch(() => {});
+    }
+
+    if (!history || history.length === 0) return [];
+
+    // 2. Select recent context (last 30 messages) to balance deep memory with optimal token latency
+    const recent = history.slice(-30);
+
+    // 3. Build rich context for each turn, retaining visual, video, PDF, and file memories
+    const mapped: { role: 'user' | 'model', text: string }[] = [];
+    for (const msg of recent) {
+        let content = (msg.text || "").trim();
+        if (msg.image) {
+            content += msg.isGenerated 
+                ? " [Visual: NEXA generated an image for user]" 
+                : " [Visual: User attached an image in this conversation]";
+        }
+        if (msg.video) {
+            content += " [Video: NEXA generated an animated motion video for user]";
+        }
+        if (msg.pdf) {
+            content += ` [Document: User attached and analyzed PDF document "${msg.pdf.name}"]`;
+        }
+        if (msg.fileInfo) {
+            content += ` [File: User shared file "${msg.fileInfo.name}" (${msg.fileInfo.type})]`;
+        }
+        if (!content) continue;
+
+        mapped.push({
+            role: msg.role === 'model' ? 'model' : 'user',
+            text: content
+        });
+    }
+
+    if (mapped.length === 0) return [];
+
+    // 4. Strict Normalization for Gemini API:
+    // A. Merge consecutive turns with the same role
+    const normalized: { role: 'user' | 'model', text: string }[] = [];
+    for (const item of mapped) {
+        if (normalized.length === 0) {
+            normalized.push({ role: item.role, text: item.text });
+        } else {
+            const last = normalized[normalized.length - 1];
+            if (last.role === item.role) {
+                last.text += "\n" + item.text;
+            } else {
+                normalized.push({ role: item.role, text: item.text });
+            }
+        }
+    }
+
+    // B. Gemini requires history to start with 'user'
+    while (normalized.length > 0 && normalized[0].role !== 'user') {
+        normalized.shift();
+    }
+
+    // C. Gemini requires history before appending current user turn to end with 'model'
+    while (normalized.length > 0 && normalized[normalized.length - 1].role !== 'model') {
+        normalized.pop();
+    }
+
+    return normalized.map(item => ({
+        role: item.role,
+        parts: [{ text: item.text }]
+    }));
 };
 
 export const clearAllMemory = async (user: UserProfile) => {

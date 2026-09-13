@@ -116,9 +116,15 @@ export interface ChatMessage {
   sources?: { title: string; url: string }[]; // Added for Search Grounding
   image?: string; // Base64 image string if the user sent an image
   video?: string; // Video URI for generated videos
+  pdf?: { name: string; size?: number }; // Attached PDF info
+  fileInfo?: { name: string; type: string; mimeType?: string; size?: number }; // General attached file info
   isGenerated?: boolean; // True if the content (image/video) was created by NEXA
   mapLocations?: MapLocation[]; // For Google Maps results
   widget?: WidgetPayload; // NEW: Structured data for UI widgets
+  agentId?: string; // e.g. 'agent_kronos', 'agent_cypher', 'agent_aura'
+  agentName?: string; // e.g. 'CYPHER', 'AURA', 'KRONOS'
+  agentRole?: string; // e.g. 'AST Compiler & Code Engineer'
+  agentColor?: string; // e.g. '#10B981', '#A855F7'
 }
 
 export interface UserFact {

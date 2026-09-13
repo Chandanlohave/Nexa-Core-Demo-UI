@@ -1,5 +1,5 @@
-import { RefreshCw, SwitchCamera } from "lucide-react";
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { SwitchCamera } from "lucide-react";
 import Auth from './components/Auth';
 import HUD from './components/HUD';
 import { AgentVirtualOffice } from './components/AgentVirtualOffice';
@@ -22,11 +22,12 @@ import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig, StudyHubSubjec
 import { generateTutorLesson, generateImageContent, generateVideoContent, editImageContent, isUserBhabhi, generateTopicContent, generateIntroductoryMessage } from './services/geminiService';
 import { playMicOnSound, playErrorSound, playAdminLoginSound } from './services/audioService';
 import { appendMessageToMemory, clearAllMemory, clearAdminNotifications, getLocalMessages, logAdminNotification, syncUserProfile, fetchSystemConfig, syncMemoryWithCloud, getAdminNotifications, getUserProfile, syncFamilyTree } from './services/memoryService';
-import { speak as speakTextTTS, stop as stopTextTTS } from './services/ttsService';
+import { speak as speakTextTTS, stop as stopTextTTS, speakAgentText } from './services/ttsService';
 import { LiveSessionManager } from './services/liveService';
 import { analyzeSystemError, RepairPlan } from './services/selfRepairService';
 import { getRobustGithubConfig, revertLastChange } from './services/githubService';
 import { NexaCoreController } from './core/NexaCoreController';
+import { verifyAdminSessionToken, clearAdminSessionToken } from './services/securityGuardService';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
@@ -335,7 +336,7 @@ const App: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [showChat, setShowChat] = useState(false);
     
-    const [pendingFile, setPendingFile] = useState<{ name: string; type: 'image' | 'text'; data: string; mimeType?: string } | null>(null);
+    const [pendingFile, setPendingFile] = useState<{ name: string; type: 'image' | 'text' | 'pdf'; data: string; mimeType?: string } | null>(null);
     
     const [config, setConfig] = useState<AppConfig>(() => {
         const defaults: AppConfig = {
@@ -434,11 +435,37 @@ const App: React.FC = () => {
         userRole: UserRole.USER as UserRole
     });
 
-    const coreController = React.useMemo(() => {
-        return new NexaCoreController(config, {
+    const coreControllerRef = useRef<NexaCoreController | null>(null);
+
+    const coreController = useMemo(() => {
+        const ctrl = new NexaCoreController(config, {
             onStateChange: setHudState,
             onMessageAdded: (msg) => setMessages(prev => [...prev, msg]),
             onSpeak: (text: string) => callbacksRef.current.speakText(text),
+            onSpeakAgent: async (agent, text) => {
+                if (callbacksRef.current.user) {
+                    stopTextTTS();
+                    callbacksRef.current.setHudState(HUDState.SPEAKING);
+                    return new Promise<void>((resolve) => {
+                        speakAgentText(
+                            callbacksRef.current.user!,
+                            text,
+                            agent.voiceKey,
+                            agent.voiceGender,
+                            () => {},
+                            () => {
+                                callbacksRef.current.setHudState(HUDState.IDLE);
+                                resolve();
+                            }
+                        ).catch(() => {
+                            callbacksRef.current.setHudState(HUDState.IDLE);
+                            resolve();
+                        });
+                    });
+                }
+            },
+            onAgentHighlight: (agentId) => callbacksRef.current.setActiveHighlightAgentId(agentId),
+            onShowChat: (show) => callbacksRef.current.setShowChat(show),
             onAction: (action: ActionType, params: any) => {
                 switch(action) {
                     case 'LOGOUT': callbacksRef.current.handleLogout(); break;
@@ -450,6 +477,14 @@ const App: React.FC = () => {
                         break;
                     case 'OPEN_ADMIN_PANEL': if(callbacksRef.current.userRole === UserRole.ADMIN) callbacksRef.current.setShowAdmin(true); break;
                     case 'OPEN_SQUAD_PANEL': callbacksRef.current.setShowSquad(true); break;
+                    case 'GENERATE_IMAGE':
+                        callbacksRef.current.setShowChat(true);
+                        ctrl.executeAction('GENERATE_IMAGE', params);
+                        break;
+                    case 'GENERATE_VIDEO':
+                        callbacksRef.current.setShowChat(true);
+                        ctrl.executeAction('GENERATE_VIDEO', params);
+                        break;
                     case 'INTRODUCE_SQUAD': 
                         if (callbacksRef.current.liveSession) {
                             callbacksRef.current.liveSession.pauseAudioForExternalSpeech();
@@ -482,6 +517,8 @@ const App: React.FC = () => {
             },
             onReloadRequested: () => window.location.reload()
         });
+        coreControllerRef.current = ctrl;
+        return ctrl;
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -504,12 +541,38 @@ const App: React.FC = () => {
             try {
                 const parsed = JSON.parse(storedUser);
                 const clientKey = localStorage.getItem('nexa_client_api_key');
-                // Regular users can NEVER use app without their own API key
-                if (parsed.role !== UserRole.ADMIN && (!clientKey || clientKey.trim().length < 10)) {
+                // Security Enforcement: If user claims ADMIN, verify cryptographic session token
+                if (parsed.role === UserRole.ADMIN) {
+                    verifyAdminSessionToken(parsed.mobile || 'admin_001').then(isValid => {
+                        if (!isValid) {
+                            console.warn("🛡️ Security Alert: Unauthorized Admin role detected without valid cryptographic token.");
+                            localStorage.removeItem('nexa_user');
+                            clearAdminSessionToken();
+                            setUser(null);
+                        } else {
+                            setUser(parsed);
+                        }
+                    }).catch(() => {
+                        localStorage.removeItem('nexa_user');
+                        setUser(null);
+                    });
+                } else if (!clientKey || clientKey.trim().length < 10) {
+                    // Regular users can NEVER use app without their own API key
                     localStorage.removeItem('nexa_user');
                     setUser(null);
                 } else {
                     setUser(parsed);
+                    // Silently sync profile in background to get latest biometrics/photos
+                    const mobileToFetch = parsed.mobile || null;
+                    if (mobileToFetch) {
+                        getUserProfile(mobileToFetch).then(cloudProfile => {
+                            if (cloudProfile && ((cloudProfile.photoUrl && cloudProfile.photoUrl !== parsed.photoUrl) || (cloudProfile.voiceprintId && cloudProfile.voiceprintId !== parsed.voiceprintId))) {
+                                const updatedUser = { ...parsed, ...cloudProfile };
+                                setUser(updatedUser);
+                                localStorage.setItem('nexa_user', JSON.stringify(updatedUser));
+                            }
+                        }).catch(() => {});
+                    }
                 }
             } catch (e) {
                 setUser(null);
@@ -517,6 +580,27 @@ const App: React.FC = () => {
         }
         fetchSystemConfig();
     }, []);
+
+    // Load past conversation messages, images, PDFs, and files from local memory & cloud
+    useEffect(() => {
+        if (user) {
+            try {
+                const local = getLocalMessages(user);
+                if (local && local.length > 0) {
+                    setMessages(local);
+                }
+                syncMemoryWithCloud(user).then((cloud) => {
+                    if (cloud && cloud.length > 0) {
+                        setMessages(cloud);
+                    }
+                }).catch(() => {});
+            } catch (e) {
+                console.error("Error loading conversation memory:", e);
+            }
+        } else {
+            setMessages([]);
+        }
+    }, [user?.mobile]);
 
     useEffect(() => {
         localStorage.setItem('nexa_config', JSON.stringify(config));
@@ -838,11 +922,14 @@ const App: React.FC = () => {
         const reader = new FileReader();
         reader.onloadend = () => {
             const result = reader.result as string;
-            let fileType: 'image' | 'text' = 'text';
+            let fileType: 'image' | 'text' | 'pdf' = 'text';
             let fileData = '';
             
             if (file.type.startsWith('image/')) {
                 fileType = 'image';
+                fileData = result.split(',')[1];
+            } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                fileType = 'pdf';
                 fileData = result.split(',')[1];
             } else {
                 fileType = 'text';
@@ -853,7 +940,7 @@ const App: React.FC = () => {
                 name: file.name, 
                 type: fileType, 
                 data: fileData,
-                mimeType: file.type 
+                mimeType: file.type || (fileType === 'pdf' ? 'application/pdf' : 'text/plain')
             });
             
             if (inputMode !== 'text') {
@@ -862,18 +949,21 @@ const App: React.FC = () => {
             }
         };
 
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
             reader.readAsDataURL(file);
         } else {
             reader.readAsText(file);
         }
     };
 
-    const processUserInput = (text: string, file: { name: string; type: 'image' | 'text'; data: string; mimeType?: string } | null) => {
+    const processUserInput = (text: string, file: { name: string; type: 'image' | 'text' | 'pdf'; data: string; mimeType?: string } | null) => {
         coreController.processUserInput(text, file);
     };
     
     const handleAction = (action: ActionType, params: any) => {
+        if (action === 'GENERATE_IMAGE' || action === 'GENERATE_VIDEO') {
+            setShowChat(true);
+        }
         coreController.executeAction(action, params);
     };
 
@@ -884,6 +974,7 @@ const App: React.FC = () => {
             setLiveSession(null);
         }
         logoutFirebase().catch(() => {});
+        clearAdminSessionToken();
         setUser(null);
         localStorage.removeItem('nexa_user');
         setMessages([]);
