@@ -182,55 +182,20 @@
 
     <script type="module" src="/index.tsx"></script>
     
-    <!-- PWA SERVICE WORKER REGISTRATION (CRITICAL FOR APP INSTALL) -->
+    <!-- SERVICE WORKER CACHE BUSTER -->
     <script>
-      if (
-        "serviceWorker" in navigator &&
-        window.location.protocol === "https:" &&
-        !window.location.hostname.includes("localhost")
-      ) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("/service-worker.js")
-            .then((reg) => {
-              console.log("NEXA ServiceWorker registered:", reg.scope);
-            })
-            .catch((err) => {
-              console.warn("NEXA ServiceWorker registration failed:", err);
-            });
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
         });
-      } else {
-        console.log("NEXA ServiceWorker skipped (dev / preview mode)");
+        if (window.caches) {
+          caches.keys().then(function(names) {
+            for (let name of names) caches.delete(name);
+          });
+        }
       }
-    </script>
-
-    <!-- DEAD MAN'S SWITCH: TRIPLE TAP TO SAFE MODE -->
-    <script>
-      (function() {
-        let taps = 0;
-        let lastTap = 0;
-        
-        document.addEventListener('touchstart', function(e) {
-            const currentTime = new Date().getTime();
-            const tapLength = currentTime - lastTap;
-            
-            if (tapLength < 500 && tapLength > 0) {
-                taps++;
-            } else {
-                taps = 1;
-            }
-            lastTap = currentTime;
-            
-            if (taps >= 3) {
-                // Trigger Safe Mode
-                console.log("TRIPLE TAP DETECTED - INITIATING SAFE MODE");
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('safemode', 'true');
-                window.location.href = currentUrl.toString();
-                taps = 0;
-            }
-        });
-      })();
     </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </body>
