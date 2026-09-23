@@ -40,6 +40,7 @@ const CameraIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 
 const EyeIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> );
 const EyeOffIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg> );
 const BoltIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> );
+const ScreenShareIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> );
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -159,7 +160,7 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
     );
 };
 
-const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputMode, onInputModeChange, textInput, onTextInputChange, onTextSubmit, textInputPlaceholder, onFileUpload, isLive, isCameraActive, onToggleCamera, showChat, pendingFile, onToggleTorch, isTorchOn, onTagAgent }: any) => {
+const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputMode, onInputModeChange, textInput, onTextInputChange, onTextSubmit, textInputPlaceholder, onFileUpload, isLive, isCameraActive, onToggleCamera, showChat, pendingFile, onToggleTorch, isTorchOn, onTagAgent, isScreenSharing, onToggleScreenShare }: any) => {
     const isListening = hudState === HUDState.LISTENING, isWarning = hudState === HUDState.WARNING, isThinking = hudState === HUDState.THINKING, isIdle = hudState === HUDState.IDLE, isSpeaking = hudState === HUDState.SPEAKING, isStudyHub = hudState === HUDState.STUDY_HUB, isLiveMode = hudState === HUDState.LIVE, isWatching = hudState === HUDState.WATCHING, isGenerating = hudState === HUDState.GENERATING, isRepairing = hudState === HUDState.REPAIRING, isCoding = hudState === HUDState.CODING, isGlitch = hudState === HUDState.GLITCH;
     let baseDuration = isThinking ? 2 : (isSpeaking || isListening || isLiveMode) ? 4 : isWarning ? 1 : isStudyHub ? 6 : 8;
     // Safety check for multiplier
@@ -223,8 +224,16 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
 
             <div className="w-full max-w-3xl mx-auto h-20 sm:h-24 relative px-4 flex items-center justify-between gap-3">
                 
-                {/* Left Side: Camera / File Upload */}
+                {/* Left Side: Camera / File Upload / Screen Share */}
                 <div className="flex items-center gap-2">
+                    <button 
+                        onClick={onToggleScreenShare} 
+                        className={`${sideButtonStyle} ${isScreenSharing ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.4)] animate-pulse' : inactiveBtnStyle}`}
+                        title={isScreenSharing ? "Stop Screen Sharing" : "Share Screen with Nexa"}
+                    >
+                        <ScreenShareIcon />
+                    </button>
+
                     {isLive ? (
                         <div className="flex flex-row items-center gap-2 z-50">
                             <button 
@@ -386,6 +395,79 @@ const App: React.FC = () => {
     const [liveSession, setLiveSession] = useState<LiveSessionManager | null>(null);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const isCameraActiveRef = useRef(false);
+    
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
+    const screenStreamRef = useRef<MediaStream | null>(null);
+    const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+
+    const handleToggleScreenShare = useCallback(async () => {
+        if (isScreenSharing) {
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(t => t.stop());
+                screenStreamRef.current = null;
+            }
+            liveSession?.stopVideo();
+            setIsScreenSharing(false);
+            setHudState(HUDState.IDLE);
+            return;
+        }
+
+        try {
+            let stream: MediaStream | null = null;
+            if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { displaySurface: 'monitor' } as any,
+                    audio: false
+                });
+            } else if ((window as any).AndroidScreenShare) {
+                (window as any).AndroidScreenShare.startScreenShare();
+                return;
+            }
+
+            if (!stream) {
+                speakText("Screen sharing is not supported on this browser.");
+                return;
+            }
+
+            screenStreamRef.current = stream;
+            const videoTrack = stream.getVideoTracks()[0];
+
+            videoTrack.onended = () => {
+                setIsScreenSharing(false);
+                if (screenStreamRef.current) {
+                    screenStreamRef.current.getTracks().forEach(t => t.stop());
+                    screenStreamRef.current = null;
+                }
+                liveSession?.stopVideo();
+                setHudState(HUDState.IDLE);
+            };
+
+            let videoEl = screenVideoRef.current;
+            if (!videoEl) {
+                videoEl = document.createElement('video');
+                videoEl.autoplay = true;
+                videoEl.playsInline = true;
+                videoEl.muted = true;
+                videoEl.style.display = 'none';
+                document.body.appendChild(videoEl);
+                screenVideoRef.current = videoEl;
+            }
+
+            videoEl.srcObject = stream;
+            await videoEl.play();
+
+            if (liveSession) {
+                liveSession.startVideo(videoEl);
+                liveSession.sendText("SCREEN_SHARE_ACTIVATED: I am now sharing my screen. Analyze my display live in real time.");
+            }
+
+            setIsScreenSharing(true);
+            setHudState(HUDState.WATCHING);
+        } catch (err) {
+            console.error("Screen Share error:", err);
+            setIsScreenSharing(false);
+        }
+    }, [isScreenSharing, liveSession]);
     
     const [zoomLevel, setZoomLevel] = useState(1);
     const zoomLevelRef = useRef(1);
@@ -1219,6 +1301,8 @@ const App: React.FC = () => {
                         pendingFile={pendingFile}
                         onToggleTorch={handleToggleTorch}
                         isTorchOn={isTorchOn}
+                        isScreenSharing={isScreenSharing}
+                        onToggleScreenShare={handleToggleScreenShare}
                         rotationSpeedMultiplier={config.micRotationSpeed || 1}
                         onTagAgent={(agentName: string) => {
                             setTextInput(`@${agentName} `);
