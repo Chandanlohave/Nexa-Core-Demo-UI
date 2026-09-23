@@ -179,29 +179,6 @@
             </div>
         </div>
     </div>
-    
-    <div id="error-screen" class="error-display">
-        <h2 style="font-size: 20px; margin-bottom: 20px;">SYSTEM BOOT FAILURE</h2>
-        <div id="error-message" style="font-size: 12px; opacity: 0.8; max-width: 400px; word-break: break-all;"></div>
-        <p style="margin-top: 20px; font-size: 12px; color: #ff8888;">
-            RAPIDLY TAP SCREEN 3 TIMES TO ENTER SAFE MODE
-        </p>
-    </div>
-    
-    <script>
-      window.onerror = function(msg, url, lineNo, columnNo, error) {
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('error-screen').style.display = 'flex';
-        document.getElementById('error-message').innerText = msg + '\n' + url + ':' + lineNo;
-        return false;
-      };
-      
-      window.addEventListener('unhandledrejection', function(event) {
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('error-screen').style.display = 'flex';
-        document.getElementById('error-message').innerText = 'Unhandled Rejection: ' + event.reason;
-      });
-    </script>
 
     <script type="module" src="/index.tsx"></script>
     
