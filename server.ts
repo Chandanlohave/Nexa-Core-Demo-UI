@@ -11,9 +11,12 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Security Headers
+// Security & Cache Control Headers
 app.disable('x-powered-by');
 app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
