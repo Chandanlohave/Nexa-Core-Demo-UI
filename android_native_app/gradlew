@@ -1,0 +1,4 @@
+#!/bin/sh
+# Nexa Android Gradle Wrapper Script
+set -e
+exec gradle "$@"

@@ -1,0 +1,12 @@
+{
+  "name": "Nexa Iris Edition 5.0",
+  "description": "Nexa IRIS - Intelligent Repair & Insight System AI Assistant",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
