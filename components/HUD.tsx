@@ -16,6 +16,7 @@ interface HUDProps {
   visualMode?: 'NEBULA' | 'CLASSIC';
   activeHighlightAgentId?: string | null;
   customAgents?: NexaAgentNode[];
+  messages?: any[];
   onResetZoom?: () => void;
 }
 
@@ -35,8 +36,9 @@ const ClassicHUDComponent: React.FC<{
   accentColor?: string;
   ecoMode?: boolean;
   gestureData?: GestureData;
+  messages?: any[];
   onResetZoom?: () => void;
-}> = ({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false, gestureData, onResetZoom }) => {
+}> = ({ state, rotationSpeed = 1, audioRef, accentColor = '#29DFFF', ecoMode = false, gestureData, messages = [], onResetZoom }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -429,31 +431,24 @@ const ClassicHUDComponent: React.FC<{
       const angleY = rotationRef.current.y + touchRotRef.current.y + handTiltY;
       const angleX = rotationRef.current.x + touchRotRef.current.x + handTiltX;
 
+      const projClassicParticles: { x: number; y: number; z2: number; color: string; scale: number; alpha: number; radius: number }[] = [];
+
       particlesRef.current.forEach((p, i) => {
-        // Individual pulse: Math.sin(time * 0.002 + randomPhase) * 5
         const individualPulse = Math.sin(time * 0.002 + p.randomPhase) * 5;
         const r = baseRadius + globalExpansion + individualPulse + audioExpansion;
 
-        // 3D Rotation Equations:
-        // rotX = r * sin(φ) * cos(θ + rotY)
-        // rotZ = r * sin(φ) * sin(θ + rotY)
-        // rotY = r * cos(φ)
         let rotX = r * Math.sin(p.phi) * Math.cos(p.theta + angleY);
         let rotZ = r * Math.sin(p.phi) * Math.sin(p.theta + angleY);
         let rotY = r * Math.cos(p.phi);
 
-        // Treble individual high-frequency particle jitter (5x on glitch)
         let shake = treble * 3 * Math.sin(time * 0.1 + i);
         if (state === HUDState.GLITCH) shake *= 5;
         rotX += shake;
         rotY += shake;
 
-        // y2 = rotY * cos(rotX) - rotZ * sin(rotX)
-        // z2 = rotY * sin(rotX) + rotZ * cos(rotX)
         const y2 = rotY * Math.cos(angleX) - rotZ * Math.sin(angleX);
         const z2 = rotY * Math.sin(angleX) + rotZ * Math.cos(angleX);
         
-        // Dynamic Perspective 2D Projection adapted for real-time scale
         const focalDist = 300 * Math.max(0.8, Math.min(2.2, currentScale));
         const scale = focalDist / (focalDist + z2);
         const blink = Math.sin(time * 0.005 + p.blinkOffset);
@@ -463,16 +458,87 @@ const ClassicHUDComponent: React.FC<{
         const screenY = (height / 2) + y2 * scale + glitchOffsetY;
         const particleRadius = Math.max(0.35, p.size * scale * Math.sqrt(Math.max(0.4, currentScale)));
         
+        let particleColor = colors[i % colors.length];
+        const blueShades = ['#29DFFF', '#00E5FF', '#38BDF8'];
+        if (messages && messages.length > 0) {
+          const msg = messages[i % messages.length];
+          if (msg) {
+            const text = (msg.text || '').toLowerCase();
+            const role = msg.role || '';
+            if (
+              text.includes('code') || text.includes('bug') || text.includes('error') || 
+              text.includes('api') || text.includes('typescript') || text.includes('python') || 
+              text.includes('compiler') || text.includes('phoenix') || text.includes('dev')
+            ) {
+              particleColor = '#10B981'; // TECH
+            } else if (
+              text.includes('business') || text.includes('market') || text.includes('finance') || 
+              text.includes('money') || text.includes('client') || text.includes('strategy') || 
+              text.includes('task') || text.includes('plan') || text.includes('roi')
+            ) {
+              particleColor = '#F59E0B'; // BUSINESS
+            } else if (
+              role === 'user' ||
+              text.includes('chandan') || text.includes('name') || text.includes('personal') || 
+              text.includes('family') || text.includes('lohave') || text.includes('remember') || 
+              text.includes('preference') || text.includes('live') || text.includes('home')
+            ) {
+              particleColor = '#29DFFF'; // PERSONAL (Electric Blue)
+            } else {
+              // NEXA Core Conscious Particles - Rich Electric Blue dominant with Purple Accents
+              particleColor = (i % 3 === 0 || i % 3 === 1) ? blueShades[i % blueShades.length] : '#A855F7';
+            }
+          }
+        } else {
+          // Default: Prominently Electric Blue (55%+) with Tech Emerald, Business Amber & System Purple Accents
+          const defaultColors = ['#29DFFF', '#00E5FF', '#10B981', '#29DFFF', '#F59E0B', '#38BDF8', '#A855F7'];
+          particleColor = defaultColors[i % defaultColors.length];
+        }
+
+        projClassicParticles.push({ x: screenX, y: screenY, z2, color: particleColor, scale, alpha, radius: particleRadius });
+      });
+
+      // Bio-Cybernetic Synaptic Filaments in Classic Mode
+      for (let i = 0; i < projClassicParticles.length; i++) {
+        const item1 = projClassicParticles[i];
+        const nextIdx = (i + 1) % projClassicParticles.length;
+        const item2 = projClassicParticles[nextIdx];
+        if (item2 && Math.abs(item1.z2 - item2.z2) < 45) {
+          let lineAlpha = Math.max(0.04, Math.min(0.25, 0.18 - (item1.z2 + item2.z2) / 1200));
+          if (state === HUDState.SPEAKING) lineAlpha = Math.min(0.65, lineAlpha * (1.3 + vol * 2.0));
+          
+          ctx.strokeStyle = item1.color;
+          ctx.globalAlpha = lineAlpha;
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(item1.x, item1.y);
+          ctx.lineTo(item2.x, item2.y);
+          ctx.stroke();
+
+          // Synaptic signal spark traveling across nodes (Slowed down to smooth, natural impulse speed)
+          const sparkProgress = (time * 0.00032 * (state === HUDState.SPEAKING ? 1.35 : 1.0) + i * 0.18) % 1;
+          const sparkX = item1.x + (item2.x - item1.x) * sparkProgress;
+          const sparkY = item1.y + (item2.y - item1.y) * sparkProgress;
+          
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw Particles
+      projClassicParticles.forEach((item) => {
         ctx.beginPath();
-        ctx.arc(screenX, screenY, particleRadius, 0, Math.PI * 2);
+        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
         
         if (state === HUDState.GLITCH && Math.random() > 0.8) {
             ctx.fillStyle = '#000000';
         } else {
-            ctx.fillStyle = colors[i % colors.length];
+            ctx.fillStyle = item.color;
         }
         
-        ctx.globalAlpha = Math.min(1, Math.max(0.06, alpha * (isDarkMode ? 1.0 : 0.85)));
+        ctx.globalAlpha = Math.min(1, Math.max(0.06, item.alpha * (isDarkMode ? 1.0 : 0.85)));
         ctx.fill();
       });
 
@@ -593,6 +659,7 @@ const HUDComponent: React.FC<HUDProps> = ({
   visualMode = 'NEBULA',
   activeHighlightAgentId,
   customAgents,
+  messages = [],
   onResetZoom
 }) => {
   if (visualMode === 'NEBULA' && state !== HUDState.CODING) {
@@ -607,6 +674,7 @@ const HUDComponent: React.FC<HUDProps> = ({
           gestureData={gestureData}
           activeHighlightAgentId={activeHighlightAgentId}
           customAgents={customAgents}
+          messages={messages}
           onResetZoom={onResetZoom}
         />
       </div>
@@ -621,6 +689,7 @@ const HUDComponent: React.FC<HUDProps> = ({
       accentColor={accentColor}
       ecoMode={ecoMode}
       gestureData={gestureData}
+      messages={messages}
       onResetZoom={onResetZoom}
     />
   );

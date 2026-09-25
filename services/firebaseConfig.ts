@@ -46,28 +46,35 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore with configured databaseId and fallback cache
-const databaseId = (config as any).firestoreDatabaseId || "(default)";
+const databaseId = (config as any).firestoreDatabaseId;
 let dbInstance: Firestore;
 
 try {
   // Use experimentalForceLongPolling for robust connectivity across sandboxed iframes & web proxies
-  dbInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: typeof window !== "undefined",
-    localCache: typeof window !== "undefined" ? persistentLocalCache({ tabManager: persistentMultipleTabManager() }) : memoryLocalCache()
-  }, databaseId);
+  if (databaseId) {
+    dbInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: typeof window !== "undefined",
+      localCache: typeof window !== "undefined" ? persistentLocalCache({ tabManager: persistentMultipleTabManager() }) : memoryLocalCache()
+    }, databaseId);
+  } else {
+    dbInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: typeof window !== "undefined",
+      localCache: typeof window !== "undefined" ? persistentLocalCache({ tabManager: persistentMultipleTabManager() }) : memoryLocalCache()
+    });
+  }
 } catch (e: any) {
   if (e.code === 'failed-precondition' || (e.message && e.message.includes('already been started'))) {
     // If it's already started (common in HMR), just get the instance
-    dbInstance = getFirestore(app, databaseId);
+    dbInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
   } else {
     try {
       // Fallback to memory cache with forced long polling
       dbInstance = initializeFirestore(app, {
         experimentalForceLongPolling: typeof window !== "undefined",
         localCache: memoryLocalCache()
-      }, databaseId);
+      });
     } catch (err: any) {
-      dbInstance = getFirestore(app, databaseId);
+      dbInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
     }
   }
 }

@@ -21,6 +21,12 @@ interface CoreParticle {
   speedOffset: number;
   blinkOffset: number;
   randomPhase: number;
+  color?: string;
+  category?: MemoryCategory;
+  categoryLabel?: string;
+  text?: string;
+  timestamp?: number;
+  connections?: number[];
 }
 
 const adjustColor = (color: string, amount: number) => {
@@ -55,6 +61,74 @@ export interface NexaAgentNode {
   activityLevel: number; // 0 to 1
 }
 
+export type MemoryCategory = 'PERSONAL' | 'TECH' | 'BUSINESS' | 'SYSTEM';
+
+export interface MemoryParticleNode {
+  id: string;
+  text: string;
+  role: 'user' | 'model' | 'system';
+  category: MemoryCategory;
+  color: string;
+  categoryLabel: string;
+  timestamp: number;
+  theta: number;
+  phi: number;
+  baseRadius: number;
+  speed: number;
+  size: number;
+  connections: number[];
+}
+
+export const categorizeMemory = (msg: any): {
+  category: MemoryCategory;
+  color: string;
+  categoryLabel: string;
+} => {
+  const text = (msg?.text || msg?.content || msg?.message || '').toLowerCase();
+  const role = msg?.role || '';
+  
+  // TECH: Code, dev, APIs, TypeScript, bugs, system architecture, engineering
+  if (
+    text.includes('code') || text.includes('bug') || text.includes('error') || 
+    text.includes('api') || text.includes('typescript') || text.includes('python') || 
+    text.includes('compiler') || text.includes('phoenix') || text.includes('dev') || 
+    text.includes('func') || text.includes('const ') || text.includes('import ') || 
+    text.includes('git') || text.includes('database') || text.includes('schema') ||
+    text.includes('component') || text.includes('react')
+  ) {
+    return { category: 'TECH', color: '#10B981', categoryLabel: 'TECH' };
+  }
+
+  // BUSINESS: Strategy, ROI, market, finance, revenue, milestones, projects, tasks
+  if (
+    text.includes('business') || text.includes('market') || text.includes('finance') || 
+    text.includes('money') || text.includes('client') || text.includes('strategy') || 
+    text.includes('task') || text.includes('plan') || text.includes('target') || 
+    text.includes('project') || text.includes('roi') || text.includes('sales') ||
+    text.includes('budget') || text.includes('growth') || text.includes('schedule')
+  ) {
+    return { category: 'BUSINESS', color: '#F59E0B', categoryLabel: 'BUSINESS' };
+  }
+
+  // PERSONAL: User queries, profile, identity, Chandan, preferences, family
+  if (
+    role === 'user' ||
+    text.includes('chandan') || text.includes('name') || text.includes('personal') || 
+    text.includes('family') || text.includes('lohave') || text.includes('remember') || 
+    text.includes('user') || text.includes('preference') || text.includes('live') || 
+    text.includes('home') || text.includes('about me') || text.includes('who am i') ||
+    text.includes('identity') || text.includes('profile') || text.includes('habit')
+  ) {
+    return { category: 'PERSONAL', color: '#29DFFF', categoryLabel: 'PERSONAL' };
+  }
+
+  // SYSTEM: NEXA core consciousness & system - Prominently Electric Cyan with Purple Accents
+  if (text.length % 2 === 0) {
+    return { category: 'SYSTEM', color: '#00E5FF', categoryLabel: 'NEXA CORE' };
+  }
+  return { category: 'SYSTEM', color: '#A855F7', categoryLabel: 'SYSTEM' };
+};
+
 interface DataPacket {
   fromNode: number;
   toNode: number;
@@ -62,6 +136,17 @@ interface DataPacket {
   speed: number;
   color: string;
   payloadType: string;
+}
+
+interface SynapticSignal {
+  fromNode: number;
+  toNode: number;
+  progress: number;
+  speed: number;
+  color: string;
+  payloadType: string;
+  signalStrength: number;
+  direction: 'outward' | 'inward' | 'internal';
 }
 
 interface NebulaOrbProps {
@@ -73,6 +158,7 @@ interface NebulaOrbProps {
   gestureData?: GestureData;
   activeHighlightAgentId?: string | null;
   customAgents?: NexaAgentNode[];
+  messages?: any[];
   onSelectAgent?: (agent: NexaAgentNode) => void;
   onResetZoom?: () => void;
 }
@@ -86,6 +172,7 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
   gestureData,
   activeHighlightAgentId,
   customAgents = [],
+  messages = [],
   onSelectAgent,
   onResetZoom
 }) => {
@@ -99,6 +186,21 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
   const coreRotRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const agentsRef = useRef<NexaAgentNode[]>([]);
   const packetsRef = useRef<DataPacket[]>([]);
+
+  // Real-Time Memory Particle Constellation System
+  const memoryNodesRef = useRef<MemoryParticleNode[]>([]);
+  const memoryPacketsRef = useRef<SynapticSignal[]>([]);
+  const [isMemoryOrbExpanded, setIsMemoryOrbExpanded] = useState<boolean>(false);
+  const mousePosRef = useRef<{ x: number; y: number }>({ x: -1000, y: -1000 });
+  const [activeMemoryNode, setActiveMemoryNode] = useState<{
+    categoryLabel: string;
+    category: MemoryCategory;
+    color: string;
+    text: string;
+    timestamp?: number;
+  } | null>(null);
+  const lastHoveredMemIdRef = useRef<string | null>(null);
+
   const [selectedAgent, setSelectedAgent] = useState<NexaAgentNode | null>(null);
   const [isZoomedInUi, setIsZoomedInUi] = useState(false);
   const [currentZoomLevel, setCurrentZoomLevel] = useState<number>(1.0);
@@ -123,7 +225,7 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
   // Initialize Galaxy Particles & Real NEXA AI Agents Network
   useEffect(() => {
     // Optimized particle count for stable, buttery 60 FPS across all devices
-    const count = ecoMode ? 400 : 1200;
+    const count = ecoMode ? 100 : 250;
     const particles: Particle[] = [];
     
     const isLive = state === HUDState.LIVE || state === HUDState.WATCHING;
@@ -187,7 +289,7 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
 
     particlesRef.current = particles;
 
-    // Real NEXA AI 6-Agent Network connected with thin laser threads (Wide Orbit Spacing)
+    // Real NEXA AI 6-Agent Network connected with thin laser threads (Enlarged Hexagon Spacing)
     const agents: NexaAgentNode[] = [
       {
         id: 'agent_core',
@@ -211,8 +313,8 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         metric: 'Accuracy: 99.8% • 1.2M Datapoints/sec',
         color: '#F59E0B',
         x: 0,
-        y: -185,
-        z: 15,
+        y: -160,
+        z: 10,
         connections: [0, 2, 6],
         pulseOffset: 0.1,
         activityLevel: 0.95
@@ -224,9 +326,9 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         status: 'COMPILER CORE // OPTIMAL',
         metric: 'Vite HMR Active • Zero AST Errors',
         color: '#10B981',
-        x: 165,
-        y: -95,
-        z: -15,
+        x: 138,
+        y: -80,
+        z: -10,
         connections: [0, 1, 3],
         pulseOffset: 0.25,
         activityLevel: 0.9
@@ -238,9 +340,9 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         status: 'VISION SENSOR // ACTIVE',
         metric: '30 FPS Optical • 21-Joint Pose',
         color: '#A855F7',
-        x: 165,
-        y: 95,
-        z: 20,
+        x: 138,
+        y: 80,
+        z: 15,
         connections: [0, 2, 4],
         pulseOffset: 0.4,
         activityLevel: 0.85
@@ -253,7 +355,7 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         metric: '100+ Live Sources',
         color: '#EC4899',
         x: 0,
-        y: 185,
+        y: 160,
         z: -10,
         connections: [0, 3, 5],
         pulseOffset: 0.55,
@@ -266,9 +368,9 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         status: 'TASK DAEMON // RUNNING',
         metric: 'Priority Queue Ready',
         color: '#F97316',
-        x: -165,
-        y: 95,
-        z: 15,
+        x: -138,
+        y: 80,
+        z: 10,
         connections: [0, 4, 6],
         pulseOffset: 0.7,
         activityLevel: 0.88
@@ -280,9 +382,9 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         status: 'FIREWALL MESH // SECURE',
         metric: '100% Secure • AES-256 Encrypted',
         color: '#EF4444',
-        x: -165,
-        y: -95,
-        z: -20,
+        x: -138,
+        y: -80,
+        z: -15,
         connections: [0, 1, 5],
         pulseOffset: 0.85,
         activityLevel: 0.98
@@ -321,22 +423,48 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       });
     });
     packetsRef.current = packets;
+  }, [ecoMode, state, customAgents]);
 
-    // Initialize 3D Spherical Shell Core Particles (260 Full Graphics, 100 Eco for pure 60FPS)
-    const coreCount = ecoMode ? 100 : 260;
-    const coreParticles: CoreParticle[] = [];
-    for (let i = 0; i < coreCount; i++) {
-      coreParticles.push({
+  // Initialize 3D Spherical Core Memory Particles (Exact Classic Aesthetics & 60 FPS)
+  useEffect(() => {
+    const msgCount = messages ? messages.length : 0;
+    // Core orb particle count matching Classic view (200 normal, 120 eco for pure 60FPS)
+    const targetCount = ecoMode ? 120 : 200;
+    const particles: CoreParticle[] = [];
+
+    for (let i = 0; i < targetCount; i++) {
+      const msg = msgCount > 0 ? messages[i % msgCount] : null;
+      // Prominently Electric Blue (55%+) with Tech Emerald, Business Amber & System Purple Accents
+      const blueShades = ['#29DFFF', '#00E5FF', '#38BDF8'];
+      const defaultCat = (
+        i % 4 === 0 || i % 4 === 2 
+          ? { category: 'PERSONAL' as const, color: blueShades[i % blueShades.length], categoryLabel: 'NEXA CORE' } :
+        i % 4 === 1 
+          ? { category: 'TECH' as const, color: '#10B981', categoryLabel: 'TECH' } :
+        (i % 8 === 3 
+          ? { category: 'BUSINESS' as const, color: '#F59E0B', categoryLabel: 'BUSINESS' } 
+          : { category: 'SYSTEM' as const, color: '#A855F7', categoryLabel: 'SYSTEM' }
+        )
+      );
+      const cat = msg ? categorizeMemory(msg) : defaultCat;
+
+      particles.push({
         theta: Math.random() * 2 * Math.PI,
         phi: Math.acos(2 * Math.random() - 1),
-        size: Math.random() * 1.4 + 0.5,
-        speedOffset: Math.random() * 0.02,
+        size: Math.random() * 1.5 + 0.6,
+        speedOffset: (0.001 + Math.random() * 0.002) * (i % 2 === 0 ? 1 : -1),
         blinkOffset: Math.random() * 100,
-        randomPhase: Math.random() * Math.PI * 2
+        randomPhase: Math.random() * Math.PI * 2,
+        color: cat.color,
+        category: cat.category,
+        categoryLabel: cat.categoryLabel,
+        text: msg ? String(msg.text || msg.content || '') : '',
+        timestamp: msg ? Number(msg.timestamp || Date.now()) : Date.now()
       });
     }
-    coreParticlesRef.current = coreParticles;
-  }, [ecoMode, state, customAgents]);
+
+    coreParticlesRef.current = particles;
+  }, [ecoMode, state, customAgents, messages]);
 
   // Sync Gesture Data (Scale, Air Tilt)
   useEffect(() => {
@@ -497,8 +625,8 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         setIsZoomedInUi(isZoomedIn);
       }
 
-      // Responsive Orbit Scale for narrow Android screens to prevent clipping
-      const responsiveOrbitScale = Math.min(1.0, Math.max(0.65, (width - 70) / 440));
+      // Responsive Orbit Scale for spacious, well-proportioned agent hexagon without clipping
+      const responsiveOrbitScale = Math.min(0.95, Math.max(0.70, (width - 30) / 410));
 
       // Theme detection for proper light vs dark rendering
       const isDarkMode = document.documentElement.classList.contains('dark');
@@ -586,16 +714,6 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       ctx.moveTo(centerX, centerY - armLen); ctx.lineTo(centerX, centerY - coreAvoidR);
       ctx.moveTo(centerX, centerY + coreAvoidR); ctx.lineTo(centerX, centerY + armLen);
       ctx.stroke();
-
-      // Degree Ticks on Outer HUD Ring
-      ctx.font = '600 8px Rajdhani, monospace';
-      ctx.fillStyle = isDarkMode ? 'rgba(41, 223, 255, 0.40)' : 'rgba(15, 23, 42, 0.60)';
-      ctx.textAlign = 'center';
-      const outerHUD = 220 * scaleBase;
-      ctx.fillText('000°', centerX, centerY - outerHUD - 6);
-      ctx.fillText('090°', centerX + outerHUD + 16, centerY + 3);
-      ctx.fillText('180°', centerX, centerY + outerHUD + 12);
-      ctx.fillText('270°', centerX - outerHUD - 16, centerY + 3);
 
       // Corner Telemetry HUD Labels
       ctx.font = '600 9px Rajdhani, monospace';
@@ -693,8 +811,8 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       const isLiveNow = state === HUDState.LIVE || state === HUDState.WATCHING;
 
       // A. Radial Laser Lines connecting Central Core Outer Edge to each Sub-Agent
-      const coreR = Math.max(48, Math.min(width * 0.16, 75)) * scaleBase;
-      const pulseBoost = Math.sin(time * 0.001) * 2.0 * scaleBase;
+      const coreR = Math.max(52, Math.min(width * 0.14, 68)) * scaleBase;
+      const pulseBoost = Math.sin(time * 0.001) * 1.5 * scaleBase;
       const activeCoreR = coreR + pulseBoost;
 
       projectedAgents.forEach(({ x, y, agent, index }) => {
@@ -812,35 +930,63 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         ctx.globalAlpha = 1.0;
       }
 
-      // B. 3D Gyroscope Arc-Reactor Rings
+      // B. CONCENTRIC CIRCULAR ROUND RINGS AROUND THE ORB WITH PULSE ANIMATION
+      // Dynamic Pulse Wave (breathing rhythm + audio bass reaction)
+      const pulseCycle = Math.sin(time * 0.0028);
+      const ringPulse = 1.0 + (pulseCycle * 0.075) + (smoothedAudioRef.current.bass * 0.15);
+      const pulseGlow = Math.max(0.65, 0.85 + Math.sin(time * 0.0035) * 0.25);
+
+      // Ring 1: Inner Concentric Round Ring - CLOCKWISE ROTATION
+      const r1 = activeCoreR * 1.25 * ringPulse;
       ctx.save();
-      ctx.rotate(time * 0.0004);
-      ctx.scale(1.0, 0.38);
-      ctx.strokeStyle = isDarkMode ? '#FFFFFF' : '#29DFFF';
-      ctx.lineWidth = 1.4 * scaleBase;
-      ctx.setLineDash([12, 8, 4, 8]);
+      ctx.rotate(time * 0.0006); // Smooth Clockwise Rotation
+      ctx.strokeStyle = isDarkMode ? `rgba(41, 223, 255, ${0.80 * pulseGlow})` : `rgba(2, 132, 199, ${0.85 * pulseGlow})`;
+      ctx.lineWidth = 1.6 * scaleBase;
+      ctx.shadowColor = coreColor;
+      ctx.shadowBlur = isDarkMode ? 12 * pulseGlow : 4;
+      // High-tech sci-fi segmented dashes matching HUD aesthetic
+      ctx.setLineDash([20 * scaleBase, 10 * scaleBase, 6 * scaleBase, 10 * scaleBase]);
       ctx.beginPath();
-      ctx.arc(0, 0, activeCoreR * 1.45, 0, Math.PI * 2);
+      ctx.arc(0, 0, r1, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // Ring 1 Orbiting Photon Node (traversing Clockwise)
+      const orbAngle1 = time * 0.0012;
+      const orbX1 = Math.cos(orbAngle1) * r1;
+      const orbY1 = Math.sin(orbAngle1) * r1;
+      ctx.fillStyle = isDarkMode ? '#FFFFFF' : '#00E5FF';
+      ctx.shadowColor = '#FFFFFF';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(orbX1, orbY1, 3.2 * scaleBase, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
 
+      // Ring 2: Outer Concentric Round Ring - ANTICLOCKWISE / COUNTER-CLOCKWISE ROTATION
+      const r2 = activeCoreR * 1.48 * ringPulse;
       ctx.save();
-      ctx.rotate(-time * 0.0003 + Math.PI / 4);
-      ctx.scale(0.42, 1.0);
-      ctx.strokeStyle = `${coreColor}CC`;
-      ctx.lineWidth = 1.2 * scaleBase;
+      ctx.rotate(-time * 0.0005); // Smooth Anti-Clockwise Rotation
+      ctx.strokeStyle = isDarkMode ? `rgba(255, 255, 255, ${0.75 * pulseGlow})` : `rgba(14, 165, 233, ${0.85 * pulseGlow})`;
+      ctx.lineWidth = 1.4 * scaleBase;
+      ctx.shadowColor = isDarkMode ? '#FFFFFF' : '#0284C7';
+      ctx.shadowBlur = isDarkMode ? 8 * pulseGlow : 3;
+      // Precision arc dashes
+      ctx.setLineDash([32 * scaleBase, 14 * scaleBase, 4 * scaleBase, 14 * scaleBase]);
       ctx.beginPath();
-      ctx.arc(0, 0, activeCoreR * 1.35, 0, Math.PI * 2);
+      ctx.arc(0, 0, r2, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
 
-      // Orbiting Photon Node
-      const orbAngle = time * 0.0006;
-      const orbX = Math.cos(orbAngle) * activeCoreR * 1.35;
-      const orbY = Math.sin(orbAngle) * activeCoreR * 1.35;
-      ctx.fillStyle = isDarkMode ? '#FFFFFF' : '#00E5FF';
+      // Ring 2 Orbiting Photon Node (traversing Anti-Clockwise)
+      const orbAngle2 = -time * 0.0010 + Math.PI;
+      const orbX2 = Math.cos(orbAngle2) * r2;
+      const orbY2 = Math.sin(orbAngle2) * r2;
+      ctx.fillStyle = coreColor;
+      ctx.shadowColor = coreColor;
+      ctx.shadowBlur = 14;
       ctx.beginPath();
-      ctx.arc(orbX, orbY, 3.0 * scaleBase, 0, Math.PI * 2);
+      ctx.arc(orbX2, orbY2, 3.5 * scaleBase, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
@@ -898,11 +1044,13 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       ctx.fillStyle = coreGrad;
       ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
 
-      // 3D Spherical Particle Shell Projection with Bloom Layering
+      // 3D Spherical Particle Shell Projection with Classic Aesthetics & 60 FPS
       ctx.save();
       ctx.globalCompositeOperation = isDarkMode ? 'lighter' : 'source-over';
 
       const coreParticles = coreParticlesRef.current;
+      const projCoreParticles: { x: number; y: number; z2: number; scale: number; alpha: number; radius: number; p: CoreParticle; index: number }[] = [];
+
       for (let i = 0; i < coreParticles.length; i++) {
         const p = coreParticles[i];
         let shake = treble * 2.5 * Math.sin(time * 0.1 + i);
@@ -922,43 +1070,107 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         let z2 = rotY * Math.sin(coreRotRef.current.x) + rotZ * Math.cos(coreRotRef.current.x);
 
         const scale = 300 / (300 + z2);
-        const alpha = scale * scale;
+        const blink = Math.sin(time * 0.005 + p.blinkOffset);
+        const brightness = 0.6 + blink * 0.4 + (vol * 1.5);
+        const alpha = scale * scale * brightness;
 
         const screenX = rotX * scale + glitchOffsetX;
         const screenY = y2 * scale + glitchOffsetY;
+        const radius = Math.max(0.4, p.size * scale);
 
+        projCoreParticles.push({ x: screenX, y: screenY, z2, scale, alpha, radius, p, index: i });
+      }
+
+      // A. Delicate Synaptic Interconnecting Filaments & Moving Neural Impulses (Exact Classic Algorithm)
+      for (let i = 0; i < projCoreParticles.length; i++) {
+        const item1 = projCoreParticles[i];
+        const nextIdx = (i + 1) % projCoreParticles.length;
+        const item2 = projCoreParticles[nextIdx];
+        if (item2 && Math.abs(item1.z2 - item2.z2) < 45) {
+          let lineAlpha = Math.max(0.04, Math.min(0.25, 0.18 - (item1.z2 + item2.z2) / 1200));
+          if (state === HUDState.SPEAKING) lineAlpha = Math.min(0.65, lineAlpha * (1.3 + vol * 2.0));
+          if (isMemoryOrbExpanded) lineAlpha = Math.min(0.90, lineAlpha * 2.2);
+
+          ctx.strokeStyle = item1.p.color || '#29DFFF';
+          ctx.globalAlpha = lineAlpha;
+          ctx.lineWidth = (isMemoryOrbExpanded ? 1.0 : 0.6) * scaleBase;
+          ctx.beginPath();
+          ctx.moveTo(item1.x, item1.y);
+          ctx.lineTo(item2.x, item2.y);
+          ctx.stroke();
+
+          // Synaptic Action Potential Electrical Spark (Slowed down to smooth, natural neural impulse speed)
+          const sparkProgress = (time * 0.00032 * (state === HUDState.SPEAKING ? 1.35 : 1.0) + i * 0.18) % 1;
+          const sparkX = item1.x + (item2.x - item1.x) * sparkProgress;
+          const sparkY = item1.y + (item2.y - item1.y) * sparkProgress;
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = Math.min(1.0, lineAlpha * 2.2);
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1.2 * scaleBase, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // B. Draw Clean Memory Hub Category Core Particles
+      let hoveredParticle: { x: number; y: number; p: CoreParticle } | null = null;
+      let minHoverDist = 20;
+
+      projCoreParticles.forEach((item) => {
         ctx.beginPath();
-        ctx.arc(screenX, screenY, p.size * scale, 0, Math.PI * 2);
+        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
 
         if (state === HUDState.GLITCH && Math.random() > 0.8) {
           ctx.fillStyle = '#000000';
         } else {
-          ctx.fillStyle = colors[i % colors.length];
+          ctx.fillStyle = item.p.color || '#29DFFF';
         }
 
-        const blink = Math.sin(time * 0.005 + p.blinkOffset);
-        const brightness = 0.6 + blink * 0.35 + (vol * 1.2);
-        ctx.globalAlpha = Math.min(1, Math.max(0.08, alpha * brightness * (isDarkMode ? 1.0 : 0.85)));
+        ctx.globalAlpha = Math.min(1, Math.max(0.06, item.alpha * (isDarkMode ? 1.0 : 0.85)));
         ctx.fill();
-      }
+
+        // Mouse Hover Check (Offset by central translation)
+        const canvasMouseX = mousePosRef.current.x - centerX;
+        const canvasMouseY = mousePosRef.current.y - centerY;
+        const dist = Math.hypot(item.x - canvasMouseX, item.y - canvasMouseY);
+        if (dist < minHoverDist) {
+          minHoverDist = dist;
+          hoveredParticle = { x: item.x, y: item.y, p: item.p };
+        }
+      });
       ctx.restore();
 
-      // E. Central Typography & Overlay
+      // D. Send Hovered Particle Tag to Side Window (Keeping central orb completely clear & pristine)
+      const foundHover = hoveredParticle as { x: number; y: number; p: CoreParticle } | null;
+      if (foundHover && foundHover.p && foundHover.p.text) {
+        if (lastHoveredMemIdRef.current !== foundHover.p.text) {
+          lastHoveredMemIdRef.current = foundHover.p.text;
+          setActiveMemoryNode({
+            categoryLabel: foundHover.p.categoryLabel || 'SYSTEM',
+            category: foundHover.p.category || 'SYSTEM',
+            color: foundHover.p.color || '#29DFFF',
+            text: foundHover.p.text,
+            timestamp: foundHover.p.timestamp
+          });
+        }
+      }
+
+      // E. Central Typography & Overlay (Exact Classic Layout)
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1.0;
 
       let mainTextColor = colors[0];
-      const fontSize = Math.max(16, baseRadius * 0.3);
+      const fontSize = Math.max(16, baseRadius * 0.32);
 
       ctx.font = `700 ${fontSize}px Rajdhani, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isDarkMode ? '#FFFFFF' : '#0284C7';
-      ctx.shadowColor = isDarkMode ? '#29DFFF' : 'rgba(41, 223, 255, 0.45)';
+      ctx.shadowColor = isDarkMode ? mainTextColor : 'rgba(41, 223, 255, 0.6)';
       ctx.shadowBlur = isDarkMode ? (15 + (vol * 20)) : 8;
+      ctx.fillStyle = isDarkMode ? '#FFFFFF' : '#0284C7';
 
-      let displayText = (activeHighlightAgentId === 'agent_core' || !activeAgent) ? "NEXA" : coreTitle;
+      let displayText = (activeHighlightAgentId === 'agent_core' || !activeAgent) ? "N.E.X.A." : coreTitle;
       if (state === HUDState.GLITCH) {
         const glitchChars = "!@#$%^&*()_+";
         if (Math.random() > 0.7) displayText = "ERROR";
@@ -966,14 +1178,13 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       }
 
       ctx.fillText(displayText, glitchOffsetX, glitchOffsetY);
+      ctx.shadowBlur = 0;
 
       if (rotationSpeed > 0) {
         ctx.font = '700 10px Rajdhani, monospace';
         // @ts-ignore
-        ctx.letterSpacing = '2px';
+        ctx.letterSpacing = '3px';
         ctx.fillStyle = isDarkMode ? '#29DFFF' : '#0284C7';
-        ctx.shadowColor = isDarkMode ? '#29DFFF' : 'transparent';
-        ctx.shadowBlur = isDarkMode ? 8 : 0;
 
         let statusText = state === HUDState.IDLE ? 'ONLINE' : (state === HUDState.LISTENING ? 'LISTENING' : (state === HUDState.THINKING ? 'THINKING' : (state === HUDState.SPEAKING ? 'SPEAKING' : state)));
         if (state === HUDState.REPAIRING) statusText = "SELF REPAIR";
@@ -981,10 +1192,10 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
         if (state === HUDState.GLITCH) statusText = "SYSTEM FAILURE";
         if (ecoMode) statusText += " [ECO]";
 
-        const textShakeX = Math.random() * bass * 3;
-        const textShakeY = Math.random() * bass * 3;
+        const textShakeX = (Math.random() - 0.5) * bass * 4;
+        const textShakeY = (Math.random() - 0.5) * bass * 4;
 
-        ctx.fillText(statusText, textShakeX + glitchOffsetX, fontSize + 10 + textShakeY + glitchOffsetY);
+        ctx.fillText(statusText, textShakeX + glitchOffsetX, fontSize * 0.75 + 10 + textShakeY + glitchOffsetY);
         // @ts-ignore
         ctx.letterSpacing = '0px';
       }
@@ -1178,14 +1389,14 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
           const cardH = 44;
           
           // Position card strictly away from center core orb
-          const isLeft = x < centerX;
-          const isTop = y < centerY;
+          const isLeftCard = x < centerX;
+          const isTopCard = y < centerY;
           
-          let rawBadgeX = isLeft 
+          let rawBadgeX = isLeftCard 
             ? x - cardW - 10 * scaleBase 
             : x + 10 * scaleBase;
             
-          let rawBadgeY = isTop 
+          let rawBadgeY = isTopCard 
             ? y - cardH - 6 * scaleBase 
             : y + 8 * scaleBase;
 
@@ -1200,12 +1411,12 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
           const safeCoreDist = activeCoreR + 35;
           
           if (distToCore < safeCoreDist) {
-            if (isLeft) {
+            if (isLeftCard) {
               badgeX = Math.max(8, x - cardW - 12);
             } else {
               badgeX = Math.min(width - cardW - 8, x + 12);
             }
-            if (isTop) {
+            if (isTopCard) {
               badgeY = Math.max(56, y - cardH - 12);
             } else {
               badgeY = Math.min(height - cardH - 80, y + 16);
@@ -1247,21 +1458,63 @@ const NebulaOrbComponent: React.FC<NebulaOrbProps> = ({
       cancelAnimationFrame(requestRef.current);
       observer.disconnect();
     };
-  }, [state, rotationSpeed, accentColor, ecoMode, activeHighlightAgentId]);
+  }, [state, rotationSpeed, accentColor, ecoMode, activeHighlightAgentId, isMemoryOrbExpanded]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      mousePosRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+  };
 
   return (
     <div
       ref={containerRef}
       onMouseDown={handleTouchStart}
-      onMouseMove={handleTouchMove}
+      onMouseMove={handleMouseMove}
       onMouseUp={handleTouchEnd}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
+      onDoubleClick={() => setIsMemoryOrbExpanded(!isMemoryOrbExpanded)}
       className="w-full h-full flex items-center justify-center overflow-hidden min-h-0 relative select-none touch-none cursor-grab active:cursor-grabbing"
     >
       <canvas ref={canvasRef} className="block w-full h-full pointer-events-auto" />
+
+      {/* Futuristic Side HUD Window for Particle Tags & Neural Telemetry */}
+      {activeMemoryNode && (
+        <div className="absolute top-16 left-3 sm:left-5 z-40 max-w-[230px] sm:max-w-[270px] bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-xl p-3 shadow-[0_0_20px_rgba(41,223,255,0.22)] animate-fade-in pointer-events-auto select-text">
+          <div className="flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-1.5 mb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: activeMemoryNode.color }} />
+              <span className="text-[10.5px] font-mono font-bold tracking-wider" style={{ color: activeMemoryNode.color }}>
+                [{activeMemoryNode.categoryLabel}] NODE
+              </span>
+            </div>
+            <button
+              onClick={() => setActiveMemoryNode(null)}
+              className="text-slate-400 hover:text-white text-xs px-1 hover:bg-white/10 rounded transition-colors"
+              title="Close window"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-xs text-slate-200 font-sans line-clamp-3 leading-relaxed">
+            {activeMemoryNode.text}
+          </p>
+          <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[9px] font-mono text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+              SYNAPSE ACTIVE
+            </span>
+            <span style={{ color: activeMemoryNode.color }}>SYNCED</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

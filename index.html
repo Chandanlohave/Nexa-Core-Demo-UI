@@ -7,8 +7,53 @@
     <!-- VIEWPORT FIX FOR ANDROID AND IPHONE NOTCH & DYNAMIC ADDRESS BAR SCALING -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#000000" />
-    <meta name="description" content="NEXA AI Assistant" />
+    <meta name="description" content="Nexa IRIS - Intelligent Repair & Insight System AI Assistant" />
+    <meta property="og:title" content="Nexa Iris Edition 5.0" />
+    <meta property="og:description" content="Nexa IRIS - Intelligent Repair & Insight System AI Assistant" />
     
+    <!-- IMMEDIATE PROCESS POLYFILL & CACHE BUSTER SCRIPT -->
+    <script>
+      window.global = window;
+      window.process = window.process || { env: { NODE_ENV: 'production' } };
+      (function() {
+        function purgeStaleElements() {
+          var loaders = document.querySelectorAll('#loader, .raw-loader, .error-display, [data-fallback]');
+          for (var i = 0; i < loaders.length; i++) {
+            loaders[i].remove();
+          }
+        }
+        purgeStaleElements();
+        document.addEventListener('DOMContentLoaded', purgeStaleElements);
+
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var i = 0; i < registrations.length; i++) {
+              registrations[i].unregister();
+            }
+          });
+        }
+        if (window.caches) {
+          caches.keys().then(function(names) {
+            for (var j = 0; j < names.length; j++) {
+              caches.delete(names[j]);
+            }
+          });
+        }
+
+        // Tap-to-Reload fallback if app fails to mount in 2s
+        var mounted = false;
+        window.__NEXA_MOUNTED__ = function() { mounted = true; };
+        
+        function handleScreenTap() {
+          if (!mounted) {
+            var cleanUrl = window.location.origin + window.location.pathname + '?ts=' + Date.now();
+            window.location.replace(cleanUrl);
+          }
+        }
+        window.addEventListener('click', handleScreenTap, { passive: true });
+        window.addEventListener('touchstart', handleScreenTap, { passive: true });
+      })();
+    </script>
     <script>
       (function() {
         function updateAppViewportHeight() {
@@ -32,10 +77,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <title>NEXA AI</title>
+    <title>Nexa Iris Edition 5.0</title>
     <!-- MediaPipe Hands for 100% Precise Air Gestures & Skeletal Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -151,17 +196,15 @@
         z-index: 10;
         pointer-events: none;
       }
-      /* Fallback Loader Styles */
-      .raw-loader {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        background: #000; z-index: 0; color: #0077ff; font-family: monospace;
-      }
-      .error-display {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: #110000; z-index: 9999; color: #ff3333; font-family: monospace;
-        display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
-        text-align: center;
+      /* Fallback Loader Styles - Strictly Hidden */
+      #loader, .raw-loader, .error-display {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
       }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

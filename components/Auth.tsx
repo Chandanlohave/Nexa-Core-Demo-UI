@@ -85,7 +85,7 @@ const CyberButton = ({ onClick, label, secondary = false, loading = false, icon 
 // --- MAIN AUTH COMPONENT ---
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
-  const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('INIT');
+  const [mode, setMode] = useState<'INIT' | 'USER_CREATE' | 'ADMIN' | 'KEY_INPUT'>('USER_CREATE');
   const [showManual, setShowManual] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<UserProfile | null>(null);
   const [testStatus, setTestStatus] = useState<{ gemini?: string; groq?: string }>({});
@@ -123,7 +123,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [glitchText, setGlitchText] = useState('SYSTEM_LOCKED');
+  const [glitchText, setGlitchText] = useState('ACCESS_GATEWAY');
   const [initStatusText, setInitStatusText] = useState('TAP TO CONNECT');
   const [isBlacklisted, setIsBlacklisted] = useState(false);
 
@@ -167,6 +167,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     completeLogin(profile);
   };
 
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    const guestProfile: UserProfile = {
+      name: 'Guest User',
+      mobile: '9999999999',
+      role: UserRole.USER,
+      gender: 'male',
+      warningCount: 0,
+      voice: 'Kore'
+    };
+    await syncUserProfile(guestProfile);
+    completeLogin(guestProfile);
+  };
+
   const handleEmailAuth = async () => {
     if (!formData.email.trim() || !formData.password.trim()) {
       playErrorSound();
@@ -204,8 +218,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
 
-  // Check connectivity options
-  const hasCustomKey = !!getStoredKey();
+  // Check connectivity options (including AI Studio environment keys)
+  const envKey = (typeof process !== 'undefined' && (process.env?.API_KEY || process.env?.GEMINI_API_KEY)) || '';
+  const hasCustomKey = !!getStoredKey() || (!!envKey && envKey !== 'undefined' && envKey.trim().length > 5);
 
   useEffect(() => {
     const headerTexts = ['SYSTEM_LOCKED', 'ENCRYPTION_ACTIVE', 'AWAITING_USER', 'NEXA_PROTOCOL'];
@@ -235,16 +250,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     
     setTimeout(() => {
         setLoading(false);
-        // STRICT API KEY ENFORCEMENT
         const sessionKey = getStoredKey();
-        const hasValidSessionKey = sessionKey && sessionKey.trim().length > 10;
+        const hasValidSessionKey = (sessionKey && sessionKey.trim().length > 10) || (!!envKey && envKey !== 'undefined' && envKey.trim().length > 5);
 
         if (hasValidSessionKey) {
             setMode('USER_CREATE');
         } else {
             setMode('KEY_INPUT');
         }
-    }, 1500);
+    }, 600);
   };
 
   const handleAdminLogin = async () => {
@@ -416,10 +430,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   const completeLogin = (profile: UserProfile) => {
-    // STRICT USER POLICY: Regular users CANNOT log in without their own Gemini API key
+    // STRICT USER POLICY: Regular users require a valid Gemini API key
     if (profile.role !== UserRole.ADMIN) {
         const storedKey = getStoredKey();
-        if (!storedKey || storedKey.trim().length < 10) {
+        const hasKey = (storedKey && storedKey.trim().length > 10) || (!!envKey && envKey !== 'undefined' && envKey.trim().length > 5);
+        if (!hasKey) {
             playErrorSound();
             setError('// MANDATORY: User accounts require your own Gemini API Key. Bina API key ke login possible nahi hai.');
             setPendingProfile(profile);
@@ -500,6 +515,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                       <h1 className="text-4xl font-bold text-zinc-900 dark:text-white tracking-widest">NEXA</h1>
                       <div className="text-zinc-500 dark:text-nexa-cyan/60 text-xs font-mono tracking-[0.3em] group-hover:text-nexa-cyan transition-colors">{loading ? 'INITIALIZING...' : initStatusText}</div>
                   </div>
+
                   {hasCustomKey && (
                       <div className="mt-4 flex flex-col items-center">
                           <div className="px-2 py-1 bg-nexa-cyan/10 border border-nexa-cyan/30 text-[10px] text-nexa-cyan tracking-widest font-mono">
@@ -548,15 +564,25 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     </div>
                   </div>
                   
-                  {/* Google Sign-In with Firebase */}
-                  <button
-                    onClick={handleGoogleSignIn}
-                    disabled={loading}
-                    className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-nexa-cyan/40 hover:border-nexa-cyan text-white text-xs font-mono tracking-wider font-semibold rounded flex items-center justify-center gap-3 transition-all cursor-pointer"
-                  >
-                    <GoogleIcon />
-                    <span>SIGN IN WITH GOOGLE</span>
-                  </button>
+                  {/* Google Sign-In & Instant Guest Enter */}
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleGoogleSignIn}
+                      disabled={loading}
+                      className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-nexa-cyan/40 hover:border-nexa-cyan text-white text-xs font-mono tracking-wider font-semibold rounded flex items-center justify-center gap-3 transition-all cursor-pointer"
+                    >
+                      <GoogleIcon />
+                      <span>SIGN IN WITH GOOGLE</span>
+                    </button>
+
+                    <button
+                      onClick={handleGuestLogin}
+                      disabled={loading}
+                      className="w-full py-2.5 px-4 bg-nexa-cyan/20 hover:bg-nexa-cyan/30 border border-nexa-cyan text-nexa-cyan text-xs font-mono tracking-wider font-semibold rounded flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(41,223,255,0.2)]"
+                    >
+                      <span>⚡ INSTANT GUEST ENTER</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2 my-2">
                     <div className="flex-1 h-[1px] bg-zinc-700/50"></div>

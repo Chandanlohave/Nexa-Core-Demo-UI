@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -9,7 +10,7 @@ import { checkAndSendBirthdayWishes } from "./services/autoWisherService";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Security & Cache Control Headers
 app.disable('x-powered-by');
@@ -62,6 +63,15 @@ app.use(express.json({ limit: '1mb' }));
 // Health Check route
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", secured: true, timestamp: new Date().toISOString() });
+});
+
+// Serve service-worker.js with zero-cache to ensure immediate update/unregistration
+app.get("/service-worker.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.sendFile(path.join(process.cwd(), "service-worker.js"));
 });
 
 // API route for generating images and proxying to avoid CORS and canvas tainting
@@ -180,10 +190,29 @@ app.post("/api/generate-image", createRateLimiter(20, 60 * 1000), async (req, re
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+      },
+      appType: "custom",
     });
     app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api') || url.startsWith('/@') || url.startsWith('/node_modules') || url.startsWith('/src')) {
+        return next();
+      }
+      try {
+        const rawTemplate = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        const transformedHtml = await vite.transformIndexHtml(url, rawTemplate);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(transformedHtml);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));

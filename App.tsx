@@ -41,6 +41,7 @@ const EyeIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24"
 const EyeOffIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg> );
 const BoltIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> );
 const ScreenShareIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> );
+const PaperclipIcon = () => ( <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg> );
 
 const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => (
     <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -59,7 +60,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, onWorkspaceHub, isOffline }: any) => {
+const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, onWorkspaceHub, onOpenVault, isOffline }: any) => {
     const firstName = React.useMemo(() => {
         if (!userName) return 'USER';
         const clean = userName.trim();
@@ -129,7 +130,7 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
                 </span>
             </div>
 
-            {/* Right Column: Compact HUD Mode button + Settings + Logout */}
+            {/* Right Column: Compact HUD Mode button + Logout */}
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 justify-end">
                 <button 
                     onClick={onToggleHudMode}
@@ -137,16 +138,6 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
                     title="Toggle Matrix / Classic HUD"
                 >
                     {hudMode === 'matrix' ? '🌐 MATRIX' : '⭕ CLASSIC'}
-                </button>
-                <button 
-                    onClick={onSettings} 
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-nexa-cyan/10 text-zinc-600 dark:text-zinc-300 hover:text-nexa-cyan transition-colors relative group cursor-pointer shrink-0" 
-                    title="Settings"
-                >
-                    <GearIcon />
-                    {userRole === UserRole.ADMIN && (
-                        <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                    )}
                 </button>
                 <button 
                     onClick={onLogout} 
@@ -222,66 +213,60 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
                 </div>
             )}
 
-            <div className="w-full max-w-3xl mx-auto h-20 sm:h-24 relative px-4 flex items-center justify-between gap-3">
+            <div className="w-full max-w-3xl mx-auto h-20 sm:h-24 relative px-4 flex items-center justify-between">
                 
-                {/* Left Side: Camera / File Upload / Screen Share */}
-                <div className="flex items-center gap-2">
+                {/* Left Side: Screen Share / Camera Vision / Torch / Attachment */}
+                <div className="flex-1 flex items-center justify-start gap-1.5 sm:gap-2 z-10">
                     <button 
                         onClick={onToggleScreenShare} 
                         className={`${sideButtonStyle} ${isScreenSharing ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.4)] animate-pulse' : inactiveBtnStyle}`}
-                        title={isScreenSharing ? "Stop Screen Sharing" : "Share Screen with Nexa"}
+                        title={isScreenSharing ? "Stop Screen Sharing" : "Screen Share / Display"}
                     >
                         <ScreenShareIcon />
                     </button>
 
-                    {isLive ? (
-                        <div className="flex flex-row items-center gap-2 z-50">
-                            <button 
-                                onClick={onToggleCamera} 
-                                className={`${sideButtonStyle} ${isCameraActive ? activeBtnStyle : inactiveBtnStyle}`}
-                                title="Toggle Vision"
-                            >
-                                {isCameraActive ? <EyeIcon /> : <EyeOffIcon />}
-                            </button>
+                    <button 
+                        onClick={onToggleCamera} 
+                        className={`${sideButtonStyle} ${isCameraActive ? activeBtnStyle : inactiveBtnStyle}`}
+                        title={isCameraActive ? "Close Camera Vision" : "Open Camera Vision"}
+                    >
+                        {isCameraActive ? <EyeIcon /> : <EyeOffIcon />}
+                    </button>
 
-                            {isCameraActive && (
-                                <button 
-                                    onClick={onToggleTorch} 
-                                    className={`${sideButtonStyle} ${isTorchOn ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_15px_#fbbf24] border-yellow-500/50' : 'bg-black/50 text-zinc-500 hover:text-yellow-200'}`}
-                                    title="Toggle Flashlight"
-                                >
-                                    <BoltIcon />
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <input 
-                                type="file" 
-                                accept="image/*,text/*,.js,.ts,.py,.html,.css,.json,.md,.pdf,.doc,.docx" 
-                                className="hidden" 
-                                ref={fileInputRef} 
-                                onChange={(e) => {
-                                    if(e.target.files && e.target.files[0]) {
-                                        onFileUpload(e.target.files[0]);
-                                        e.target.value = ''; 
-                                    }
-                                }}
-                            />
-                            <button 
-                                onClick={() => fileInputRef.current?.click()} 
-                                className={`${sideButtonStyle} ${pendingFile ? activeBtnStyle : inactiveBtnStyle}`}
-                                title="Upload File / Image"
-                            >
-                                <CameraIcon />
-                            </button>
-                        </>
+                    {isCameraActive && (
+                        <button 
+                            onClick={onToggleTorch} 
+                            className={`${sideButtonStyle} ${isTorchOn ? 'bg-yellow-500/20 text-yellow-400 shadow-[0_0_15px_#fbbf24] border-yellow-500/50' : 'bg-black/50 text-zinc-500 hover:text-yellow-200'}`}
+                            title="Toggle Flashlight"
+                        >
+                            <BoltIcon />
+                        </button>
                     )}
+
+                    <input 
+                        type="file" 
+                        accept="image/*,text/*,.js,.ts,.py,.html,.css,.json,.md,.pdf,.doc,.docx" 
+                        className="hidden" 
+                        ref={fileInputRef} 
+                        onChange={(e) => {
+                            if(e.target.files && e.target.files[0]) {
+                                onFileUpload(e.target.files[0]);
+                                e.target.value = ''; 
+                            }
+                        }}
+                    />
+                    <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className={`${sideButtonStyle} ${pendingFile ? activeBtnStyle : inactiveBtnStyle}`}
+                        title="Attach Screenshot / Image / File"
+                    >
+                        <PaperclipIcon />
+                    </button>
                 </div>
 
-                {/* Center Control: Typing Input Bar OR Voice Reactor Core */}
+                {/* Center Control: Typing Input Bar OR Mathematically Dead-Centered Voice Reactor Core */}
                 {isTextInputActive ? (
-                    <div className="flex-1 max-w-xl h-full flex items-center justify-center animate-fade-in">
+                    <div className="flex-1 max-w-xl h-full flex items-center justify-center animate-fade-in z-20 mx-2">
                          <form onSubmit={onTextSubmit} className="w-full flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 border border-nexa-cyan/40 rounded-full px-4 py-1.5 backdrop-blur-md shadow-[0_0_15px_rgba(41,223,255,0.15)]">
                             <input 
                                 type="text"
@@ -302,7 +287,7 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
                         </form>
                     </div>
                 ) : (
-                    <div className="relative z-20 flex flex-col items-center justify-center">
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center justify-center pointer-events-auto">
                         <button 
                             onClick={onMicClick} 
                             className={`relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center rounded-full transition-all duration-300 group ${buttonScale} ${isIdle ? 'animate-breathing' : ''} cursor-pointer`} 
@@ -318,7 +303,7 @@ const ControlDeck = ({ onMicClick, hudState, rotationSpeedMultiplier = 1, inputM
                 )}
                 
                 {/* Right Side: TYPE / VOICE MODE TOGGLE BUTTON */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex-1 flex items-center justify-end gap-2 z-10">
                     <button 
                         onClick={onInputModeChange} 
                         className={`${sideButtonStyle} ${isTextInputActive || showChat ? activeBtnStyle : inactiveBtnStyle} flex items-center justify-center relative group`}
@@ -399,6 +384,8 @@ const App: React.FC = () => {
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const screenStreamRef = useRef<MediaStream | null>(null);
     const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+    const screenshotInputRef = useRef<HTMLInputElement>(null);
+    const [screenShareNotice, setScreenShareNotice] = useState<{ message: string; action?: 'camera' | 'camera_or_screenshot' } | null>(null);
 
     const handleToggleScreenShare = useCallback(async () => {
         if (isScreenSharing) {
@@ -409,26 +396,38 @@ const App: React.FC = () => {
             liveSession?.stopVideo();
             setIsScreenSharing(false);
             setHudState(HUDState.IDLE);
+            setScreenShareNotice({ message: "Screen sharing disconnected." });
+            setTimeout(() => setScreenShareNotice(null), 3000);
+            return;
+        }
+
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
+        let stream: MediaStream | null = null;
+        if (!isMobileDevice && navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            } catch (displayErr: any) {
+                if (displayErr.name === 'NotAllowedError' || displayErr.name === 'AbortError') {
+                    setScreenShareNotice({ message: "Screen share request cancelled." });
+                    setTimeout(() => setScreenShareNotice(null), 3000);
+                    return;
+                }
+                console.warn("getDisplayMedia error:", displayErr);
+            }
+        }
+
+        if (!stream) {
+            // Screen share not supported or restricted by Android/iOS browser sandbox
+            callbacksRef.current.speakText("Mobile Chrome Android security ke kaaran direct screen share allow nahi karta. Aap Camera Vision se screen dikha sakte hain ya screenshot upload kar sakte hain!");
+            setScreenShareNotice({
+                message: "Mobile Chrome restricts OS-wide screen capture. Use Live Camera Vision (📷) or Upload Screenshot (📸) to show Nexa your screen.",
+                action: 'camera_or_screenshot'
+            });
             return;
         }
 
         try {
-            let stream: MediaStream | null = null;
-            if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-                stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { displaySurface: 'monitor' } as any,
-                    audio: false
-                });
-            } else if ((window as any).AndroidScreenShare) {
-                (window as any).AndroidScreenShare.startScreenShare();
-                return;
-            }
-
-            if (!stream) {
-                speakText("Screen sharing is not supported on this browser.");
-                return;
-            }
-
             screenStreamRef.current = stream;
             const videoTrack = stream.getVideoTracks()[0];
 
@@ -440,6 +439,7 @@ const App: React.FC = () => {
                 }
                 liveSession?.stopVideo();
                 setHudState(HUDState.IDLE);
+                setScreenShareNotice(null);
             };
 
             let videoEl = screenVideoRef.current;
@@ -459,13 +459,19 @@ const App: React.FC = () => {
             if (liveSession) {
                 liveSession.startVideo(videoEl);
                 liveSession.sendText("SCREEN_SHARE_ACTIVATED: I am now sharing my screen. Analyze my display live in real time.");
+            } else {
+                callbacksRef.current.speakText("Screen sharing connected. I can now see your screen. Ask me anything about what's on your screen!");
             }
 
             setIsScreenSharing(true);
             setHudState(HUDState.WATCHING);
+            setScreenShareNotice({ message: "Screen Share Active // Nexa Live Vision Connected" });
+            setTimeout(() => setScreenShareNotice(null), 5000);
         } catch (err) {
-            console.error("Screen Share error:", err);
+            console.error("Screen Share stream error:", err);
             setIsScreenSharing(false);
+            setScreenShareNotice({ message: "Failed to initialize screen video stream." });
+            setTimeout(() => setScreenShareNotice(null), 4000);
         }
     }, [isScreenSharing, liveSession]);
     
@@ -675,14 +681,16 @@ const App: React.FC = () => {
                     if (cloud && cloud.length > 0) {
                         setMessages(cloud);
                     }
-                }).catch(() => {});
+                }).catch((err) => {
+                    console.warn("syncMemoryWithCloud warning:", err);
+                });
             } catch (e) {
                 console.error("Error loading conversation memory:", e);
             }
         } else {
             setMessages([]);
         }
-    }, [user?.mobile]);
+    }, [user?.mobile, user?.id, user?.role, user?.name]);
 
     useEffect(() => {
         localStorage.setItem('nexa_config', JSON.stringify(config));
@@ -740,52 +748,33 @@ const App: React.FC = () => {
     }, []);
 
     const getStreamForFacingMode = async (targetMode: 'user' | 'environment') => {
-        // 1. Try device enumeration to find explicit front/back camera
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            if (videoDevices.length > 1) {
-                const isUser = targetMode === 'user';
-                const match = videoDevices.find(d => {
-                    const l = (d.label || '').toLowerCase();
-                    return isUser 
-                        ? (l.includes('front') || l.includes('user') || l.includes('face') || l.includes('selfie') || l.includes('forward'))
-                        : (l.includes('back') || l.includes('rear') || l.includes('environment') || l.includes('world'));
-                });
-                if (match && match.deviceId) {
-                    return await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            deviceId: { exact: match.deviceId },
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        }
-                    });
-                }
-            }
-        } catch (enumErr) {
-            console.warn("Device enumeration bypass:", enumErr);
-        }
-
-        // 2. Try exact facingMode constraint
+        // 1. Try ideal constraints (avoids OverconstrainedError on Android phones)
         try {
             return await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: { exact: targetMode },
+                    facingMode: { ideal: targetMode },
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             });
-        } catch (exactErr) {
-            console.warn("Exact facingMode failed, trying direct facingMode:", exactErr);
+        } catch (e1) {
+            console.warn("Camera attempt 1 ideal facingMode failed:", e1);
         }
 
-        // 3. Fallback direct facingMode
+        // 2. Try simple facingMode string
+        try {
+            return await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: targetMode
+                }
+            });
+        } catch (e2) {
+            console.warn("Camera attempt 2 simple facingMode failed:", e2);
+        }
+
+        // 3. Guaranteed fallback to any active video camera
         return await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: targetMode,
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }
+            video: true
         });
     };
 
@@ -793,18 +782,16 @@ const App: React.FC = () => {
         if (isCameraActive) {
             liveSession?.stopVideo();
             cleanupCamera();
-            setHudState(HUDState.LIVE);
+            setHudState(liveSession ? HUDState.LIVE : HUDState.IDLE);
             return;
         }
-
-        if (!liveSession) return;
 
         try {
             const stream = await getStreamForFacingMode(facingModeRef.current);
             cameraStreamRef.current = stream;
             
             const track = stream.getVideoTracks()[0];
-            const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+            const capabilities = typeof track?.getCapabilities === 'function' ? track.getCapabilities() : {};
             
             // @ts-ignore
             if (capabilities.zoom && capabilities.zoom.max > 1) {
@@ -826,18 +813,32 @@ const App: React.FC = () => {
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 await videoRef.current.play();
-                liveSession.startVideo(videoRef.current, () => zoomLevelRef.current);
                 setCameraState(true);
                 setHudState(HUDState.WATCHING);
-                
-                liveSession.sendText("CAMERA_ACTIVATED: I have turned on my camera. Briefly tell me what you see to confirm vision is working.");
-                
                 setShowChat(false);
+
+                if (liveSession) {
+                    liveSession.startVideo(videoRef.current, () => zoomLevelRef.current);
+                    liveSession.sendText("CAMERA_ACTIVATED: I have turned on my camera. Briefly tell me what you see to confirm vision is working.");
+                } else {
+                    callbacksRef.current.speakText("Camera vision active. Screen ya object par point karein aur mic par click karke baat karein!");
+                }
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Camera access error:", err);
-            speakText("I couldn't access your camera. Please check the permissions.");
             cleanupCamera();
+            if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+                callbacksRef.current.speakText("Mobile Chrome me Camera permission blocked hai. Address bar ke lock icon par tap karke allow karein.");
+                setScreenShareNotice({
+                    message: "Camera access blocked in Chrome. Tap 🔒 in address bar > Site Settings > Permissions > Allow Camera."
+                });
+            } else {
+                callbacksRef.current.speakText("Camera shuru nahi ho paya. Kripya check karein permissions allowed hain ya nahi.");
+                setScreenShareNotice({
+                    message: "Could not access camera. Ensure camera permissions are allowed in Chrome and retry."
+                });
+            }
+            setTimeout(() => setScreenShareNotice(null), 7000);
         }
     }, [isCameraActive, liveSession, cleanupCamera]);
     
@@ -958,7 +959,15 @@ const App: React.FC = () => {
             
             const session = new LiveSessionManager(user, config.naughtyModeOverride || false, {
                 onStateChange: (state) => {
-                    if (state === 'open') setHudState(HUDState.LIVE);
+                    if (state === 'open') {
+                        if (cameraStreamRef.current && videoRef.current) {
+                            setHudState(HUDState.WATCHING);
+                            session.startVideo(videoRef.current, () => zoomLevelRef.current);
+                            session.sendText("CAMERA_ACTIVATED: I have turned on my camera. Briefly tell me what you see to confirm vision is working.");
+                        } else {
+                            setHudState(HUDState.LIVE);
+                        }
+                    }
                     else if (state === 'closed' || state === 'error') {
                         setHudState(HUDState.IDLE);
                         cleanupCamera();
@@ -1039,7 +1048,31 @@ const App: React.FC = () => {
     };
 
     const processUserInput = (text: string, file: { name: string; type: 'image' | 'text' | 'pdf'; data: string; mimeType?: string } | null) => {
-        coreController.processUserInput(text, file);
+        let activeFile = file;
+        if (!activeFile && isScreenSharing && screenVideoRef.current) {
+            try {
+                const vid = screenVideoRef.current;
+                if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.min(1280, vid.videoWidth);
+                    canvas.height = Math.round((canvas.width / vid.videoWidth) * vid.videoHeight);
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                        activeFile = {
+                            name: 'screen_snapshot.jpg',
+                            type: 'image',
+                            data: dataUrl.split(',')[1],
+                            mimeType: 'image/jpeg'
+                        };
+                    }
+                }
+            } catch (e) {
+                console.warn("Screen snapshot failed:", e);
+            }
+        }
+        coreController.processUserInput(text, activeFile);
     };
     
     const handleAction = (action: ActionType, params: any) => {
@@ -1214,8 +1247,80 @@ const App: React.FC = () => {
                         onSettings={handleSettingsClick} 
                         onStudyHub={() => setShowStudyHub(true)}
                         onWorkspaceHub={() => setShowWorkspaceHub(true)}
+                        onOpenVault={() => setShowMemoryVault(true)}
                         isOffline={!navigator.onLine} 
                     />
+
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        ref={screenshotInputRef} 
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                                handleFileUpload(e.target.files[0]);
+                                e.target.value = '';
+                            }
+                        }}
+                    />
+
+                    {screenShareNotice && (
+                        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-lg flex flex-col items-center gap-2.5 bg-black/95 backdrop-blur-md border border-cyan-500/60 px-4 py-3 rounded-2xl shadow-[0_0_35px_rgba(41,223,255,0.35)] animate-fade-in pointer-events-auto">
+                            <div className="flex items-start gap-2.5 w-full">
+                                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping shrink-0 mt-1"></span>
+                                <div className="flex-1 text-left">
+                                    <p className="text-xs sm:text-sm font-mono text-cyan-200 leading-snug">
+                                        {screenShareNotice.message}
+                                    </p>
+                                    <p className="text-[10px] font-mono text-zinc-400 mt-1">
+                                        💡 Android/iOS Chrome policy restricts whole-screen sharing. Use Camera or Screenshot on phone, or open on Desktop PC Chrome for native 1-click screen share.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setScreenShareNotice(null)}
+                                    className="text-xs font-mono text-zinc-400 hover:text-white px-1.5 py-0.5"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2 w-full pt-1 border-t border-cyan-500/20">
+                                <button
+                                    onClick={() => {
+                                        setScreenShareNotice(null);
+                                        handleToggleCamera();
+                                    }}
+                                    className="text-xs font-mono font-bold bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-300 border border-cyan-500/50 px-3.5 py-1.5 rounded-full cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                                >
+                                    📷 Open Camera Vision
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setScreenShareNotice(null);
+                                        screenshotInputRef.current?.click();
+                                    }}
+                                    className="text-xs font-mono font-bold bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/50 px-3.5 py-1.5 rounded-full cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                                >
+                                    📸 Upload Screenshot
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {isScreenSharing && (
+                        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-black/85 backdrop-blur-md border border-emerald-500/60 px-4 py-1.5 rounded-full shadow-[0_0_25px_rgba(16,185,129,0.35)] animate-fade-in pointer-events-auto">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+                                Screen Share Active // Nexa Live Vision
+                            </span>
+                            <button
+                                onClick={handleToggleScreenShare}
+                                className="text-[10px] font-mono font-bold bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/50 px-2.5 py-0.5 rounded-full cursor-pointer transition-colors"
+                            >
+                                Stop
+                            </button>
+                        </div>
+                    )}
                     
                     <div className="flex-1 relative min-h-0 w-full flex items-center justify-center pointer-events-none">
                         <div className="w-full h-full pointer-events-auto">
@@ -1229,6 +1334,7 @@ const App: React.FC = () => {
                                 visualMode={config.hudMode === 'classic' ? 'CLASSIC' : 'NEBULA'}
                                 activeHighlightAgentId={activeHighlightAgentId}
                                 customAgents={customAgents}
+                                messages={messages}
                                 onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
                             />
                         </div>
@@ -1336,7 +1442,7 @@ const App: React.FC = () => {
                             try { localStorage.setItem('nexa_user', JSON.stringify(updatedUser)); } catch(e) {}
                         }}
                     />
-                    <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} />
+                    <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} onOpenVault={() => setShowMemoryVault(true)} />
                     <StudyHubPanel isOpen={showStudyHub} onClose={() => setShowStudyHub(false)} user={user} onStartLesson={(subject, topic) => {
                          processUserInput(`Teach me ${topic || 'summary'} from ${subject.courseName}`, null);
                          setShowStudyHub(false);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig, UserFact, UserProfile, VOICES, VoiceKey, Reminder, AccessKeyDefinition } from '../types';
-import { getFacts, deleteFact, getUserProfile, syncUserProfile, fetchSystemConfig, saveSystemConfig, createCustomAccessKey, getAccessKeys, deleteAccessKey, subscribeToAccessKeys, subscribeToRegisteredUsers } from '../services/memoryService';
+import { getFacts, getFactsAsync, deleteFact, getUserProfile, syncUserProfile, fetchSystemConfig, saveSystemConfig, createCustomAccessKey, getAccessKeys, deleteAccessKey, subscribeToAccessKeys, subscribeToRegisteredUsers } from '../services/memoryService';
 import { testGeminiApiKey } from '../services/geminiService';
 import { getEvolutionState, triggerActiveEvolutionCycle, EvolutionMetric } from '../services/evolutionService';
 import { Key, Users, RefreshCw, Copy, Check, Trash2, ShieldCheck, UserCheck } from 'lucide-react';
@@ -180,13 +180,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   useEffect(() => {
       if (viewingMemory && currentUser) {
-          setFacts(getFacts(currentUser));
+          getFactsAsync(currentUser).then(cloudFacts => {
+              setFacts(cloudFacts);
+          }).catch(() => {
+              setFacts(getFacts(currentUser));
+          });
       }
   }, [viewingMemory, currentUser]);
 
-  const handleDeleteFact = (id: string) => {
+  const handleDeleteFact = async (id: string) => {
       if (currentUser) {
-          deleteFact(currentUser, id);
+          await deleteFact(currentUser, id);
           setFacts(prev => prev.filter(f => f.id !== id));
       }
   };

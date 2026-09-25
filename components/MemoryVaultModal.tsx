@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, ChatMessage } from '../types';
-import { getLocalMessages, appendMessageToMemory, clearAllMemory } from '../services/memoryService';
+import { getLocalMessages, appendMessageToMemory, clearAllMemory, syncMemoryWithCloud, getUserMobileOrId } from '../services/memoryService';
+import { db } from '../services/firebaseConfig';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 interface MemoryVaultModalProps {
   user: UserProfile;
@@ -21,21 +23,79 @@ export const MemoryVaultModal: React.FC<MemoryVaultModalProps> = ({ user, onClos
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [newMemoryText, setNewMemoryText] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const userKey = getUserMobileOrId(user);
+  const dbPath = `users/${userKey}/chats`;
 
   useEffect(() => {
-    loadMemories();
-  }, [user]);
+    handleCloudSync();
 
-  const loadMemories = () => {
-    const rawMsgs = getLocalMessages(user);
-    const parsed: MemoryEntry[] = rawMsgs.map((m, idx) => ({
-      id: `vault_mem_${m.timestamp || Date.now()}_${idx}_${Math.random().toString(36).substring(2, 9)}`,
-      role: m.role,
-      text: m.text,
-      timestamp: m.timestamp || Date.now(),
-      tag: categorizeText(m.text)
-    }));
-    setMemories(parsed.reverse());
+    // Direct Real-Time Firestore Listener for instant cloud synchronization
+    const chatsRef = collection(db, "users", userKey, "chats");
+    const unsubscribe = onSnapshot(chatsRef, (snapshot) => {
+      const msgs: ChatMessage[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data) {
+          const textVal = data.text || data.content || data.message;
+          if (textVal) {
+            msgs.push({
+              role: data.role === 'user' ? 'user' : 'model',
+              text: String(textVal),
+              timestamp: Number(data.timestamp || data.createdAt || Date.now()),
+              image: data.image,
+              video: data.video,
+              pdf: data.pdf,
+              fileInfo: data.fileInfo
+            });
+          }
+        }
+      });
+      msgs.sort((a, b) => a.timestamp - b.timestamp);
+
+      const parsed: MemoryEntry[] = msgs.map((m, idx) => ({
+        id: `vault_mem_${m.timestamp || Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+        role: m.role,
+        text: m.text,
+        timestamp: m.timestamp || Date.now(),
+        tag: categorizeText(m.text)
+      }));
+      setMemories(parsed.reverse());
+    }, (err) => {
+      console.warn("Firestore snapshot listener warning:", err);
+    });
+
+    return () => unsubscribe();
+  }, [userKey]);
+
+  const handleCloudSync = async () => {
+    setIsSyncing(true);
+    try {
+      const synced = await syncMemoryWithCloud(user);
+      const parsed: MemoryEntry[] = synced.map((m, idx) => ({
+        id: `vault_mem_${m.timestamp || Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+        role: m.role,
+        text: m.text,
+        timestamp: m.timestamp || Date.now(),
+        tag: categorizeText(m.text)
+      }));
+      setMemories(parsed.reverse());
+    } catch (e) {
+      console.warn("Cloud sync warning:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleExportData = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(memories, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `nexa_database_export_${user.mobile || 'admin'}_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const categorizeText = (text: string): string => {
@@ -59,13 +119,13 @@ export const MemoryVaultModal: React.FC<MemoryVaultModalProps> = ({ user, onClos
     await appendMessageToMemory(user, msg);
     setNewMemoryText('');
     setIsAdding(false);
-    loadMemories();
+    await handleCloudSync();
   };
 
-  const handleClearAll = () => {
-    if (window.confirm("Are you sure you want to clear all neural memories for this session?")) {
-      clearAllMemory(user);
-      loadMemories();
+  const handleClearAll = async () => {
+    if (window.confirm("Are you sure you want to clear all neural memories from Firestore Cloud for this session?")) {
+      await clearAllMemory(user);
+      await handleCloudSync();
     }
   };
 
@@ -80,27 +140,50 @@ export const MemoryVaultModal: React.FC<MemoryVaultModalProps> = ({ user, onClos
       <div className="bg-zinc-900 border border-blue-500/30 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(59,130,246,0.15)] overflow-hidden">
         
         {/* Header */}
-        <div className="p-5 border-b border-blue-500/20 flex justify-between items-center bg-blue-950/20">
+        <div className="p-4 sm:p-5 border-b border-blue-500/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-blue-950/20">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-blue-400 font-bold">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-blue-400 font-bold shrink-0">
               🧠
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                PERSISTENT NEURAL MEMORY VAULT
-                <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
-                  FIRESTORE SYNCED
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 flex-wrap">
+                DATABASE MEMORY VAULT
+                <span className={`text-[10px] font-mono border px-2 py-0.5 rounded-full ${
+                  isSyncing 
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                }`}>
+                  {isSyncing ? 'SYNCING FIRESTORE...' : 'FIRESTORE CLOUD ACTIVE'}
                 </span>
               </h2>
-              <p className="text-xs text-zinc-400">Long-term persistent facts, conversation telemetry & AI memory cache</p>
+              <p className="text-[11px] text-zinc-400 font-mono">
+                Firestore DB: <span className="text-blue-400">/{dbPath}</span>
+              </p>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
-            className="text-zinc-400 hover:text-white text-xl p-2 rounded-lg hover:bg-zinc-800 transition-colors"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={handleCloudSync}
+              disabled={isSyncing}
+              className="px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 font-mono text-[11px] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Force sync latest chats from Firestore Cloud"
+            >
+              🔄 {isSyncing ? 'Syncing...' : 'Sync Cloud'}
+            </button>
+            <button
+              onClick={handleExportData}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[11px] transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Export database history as JSON"
+            >
+              📥 Export JSON
+            </button>
+            <button 
+              onClick={onClose} 
+              className="text-zinc-400 hover:text-white text-xl p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Content Controls */}

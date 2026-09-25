@@ -29,12 +29,19 @@ export default defineConfig(({ mode }) => {
     },
     // Define process.env to make environment variables available in the client-side code
     define: {
-      // FIX: Checks for all standard Gemini API key environment variable variants. Defaults to '' to prevent undefined crash.
+      'global': 'window',
       'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY || env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || ''),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_API_KEY || env.API_KEY || ''),
+      'process.env': JSON.stringify({
+        NODE_ENV: mode === 'production' ? 'production' : 'development',
+        API_KEY: env.VITE_API_KEY || env.API_KEY || env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '',
+        GEMINI_API_KEY: env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.VITE_API_KEY || env.API_KEY || ''
+      }),
     },
     server: {
       host: true,
+      hmr: false,
+      ws: false,
     },
     build: {
       outDir: 'dist',

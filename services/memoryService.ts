@@ -24,12 +24,22 @@ export const FAMILY_TREE = {
     encryption: "AES-256"
 };
 
+// --- HELPER TO GET USER MOBILE OR ID (PREVENTS UNDEFINED FIRESTORE PATHS) ---
+export const getUserMobileOrId = (user: UserProfile | null | undefined): string => {
+    if (!user) return 'admin_001';
+    if (user.mobile && typeof user.mobile === 'string' && user.mobile.trim().length > 0) return user.mobile.trim();
+    if (user.id && typeof user.id === 'string' && user.id.trim().length > 0) return user.id.trim();
+    if (user.role === UserRole.ADMIN || (user as any).role === 'ADMIN') return 'admin_001';
+    return 'user_001';
+};
+
 // --- HELPER TO GET STORAGE KEY ---
 const getStorageKey = (user: UserProfile, type: string) => {
-    if (user.role === UserRole.ADMIN) {
+    const userKey = getUserMobileOrId(user);
+    if (user.role === UserRole.ADMIN || userKey === 'admin_001') {
         return `${ADMIN_ROOT}_${type}`;
     }
-    return `${USER_ROOT_PREFIX}${user.mobile}_${type}`;
+    return `${USER_ROOT_PREFIX}${userKey}_${type}`;
 };
 
 // --- HELPER: SYSTEM ACCESS ---
@@ -76,7 +86,8 @@ export const searchMemoriesByDate = async (user: UserProfile, dateString: string
         const targetDate = new Date(dateString);
         if (isNaN(targetDate.getTime())) return "INVALID DATE FORMAT";
 
-        const chatsRef = collection(db, "users", user.mobile, "chats");
+        const userKey = getUserMobileOrId(user);
+        const chatsRef = collection(db, "users", userKey, "chats");
 
         // Helper to run query
         const runQuery = async (start: Date, end: Date) => {
@@ -695,16 +706,17 @@ export const verifyAdminPassword = async (input: string): Promise<boolean> => {
 export const syncUserProfile = async (user: UserProfile): Promise<void> => {
     localStorage.setItem(getStorageKey(user, 'profile'), JSON.stringify(user));
 
+    const userKey = getUserMobileOrId(user);
     if (user.role === UserRole.USER) {
         try {
             const registryData = localStorage.getItem('NEXA_GLOBAL_USER_REGISTRY');
             const registry = registryData ? JSON.parse(registryData) : [];
-            if (!registry.includes(user.mobile)) {
-                registry.push(user.mobile);
+            if (!registry.includes(userKey)) {
+                registry.push(userKey);
                 localStorage.setItem('NEXA_GLOBAL_USER_REGISTRY', JSON.stringify(registry));
             }
         } catch (e) {
-            localStorage.setItem('NEXA_GLOBAL_USER_REGISTRY', JSON.stringify([user.mobile]));
+            localStorage.setItem('NEXA_GLOBAL_USER_REGISTRY', JSON.stringify([userKey]));
         }
     }
 
@@ -717,7 +729,7 @@ export const syncUserProfile = async (user: UserProfile): Promise<void> => {
         };
         Object.keys(userPayload).forEach(key => (userPayload as any)[key] === undefined && delete (userPayload as any)[key]);
 
-        await setDoc(doc(db, "users", user.mobile), userPayload, { merge: true });
+        await setDoc(doc(db, "users", userKey), userPayload, { merge: true });
     } catch (e) {
         console.error("syncUserProfile Firestore Error:", e);
     }
@@ -767,75 +779,271 @@ export const saveUserSchedule = async (userId: string, subjects: StudyHubSubject
 };
 
 export const getFacts = (user: UserProfile): UserFact[] => {
-    const key = getStorageKey(user, 'facts');
-    try {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : [];
-    } catch (e) { return []; }
+    const primaryKey = getStorageKey(user, 'facts');
+    const userKey = getUserMobileOrId(user);
+    const candidateKeys = [
+        primaryKey,
+        'NEXA_ADMIN_DATA_facts',
+        'nexa_facts',
+        'user_facts',
+        `NEXA_USER_DATA_${userKey}_facts`,
+        user.mobile ? `NEXA_USER_DATA_${user.mobile}_facts` : ''
+    ].filter(Boolean);
+
+    const allFacts: UserFact[] = [];
+    const seen = new Set<string>();
+
+    for (const k of candidateKeys) {
+        try {
+            const raw = localStorage.getItem(k);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                for (const f of parsed) {
+                    if (f && f.content) {
+                        const sig = f.id || f.content;
+                        if (!seen.has(sig)) {
+                            seen.add(sig);
+                            allFacts.push(f);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (allFacts.length > 0) {
+        try {
+            localStorage.setItem(primaryKey, JSON.stringify(allFacts));
+        } catch (e) {}
+    }
+
+    return allFacts;
 };
 
-export const saveFacts = (user: UserProfile, facts: UserFact[]) => {
+export const getFactsAsync = async (user: UserProfile): Promise<UserFact[]> => {
+    const localFacts = getFacts(user);
+    if (!navigator.onLine) return localFacts;
+
+    const userKey = getUserMobileOrId(user);
+    const candidatePaths = Array.from(new Set([
+        userKey,
+        'admin_001',
+        'admin',
+        user.mobile ? user.mobile.trim() : '',
+        user.id ? user.id.trim() : ''
+    ])).filter(Boolean);
+
+    const factMap = new Map<string, UserFact>();
+    for (const f of localFacts) {
+        const sig = f.id || f.content;
+        factMap.set(sig, f);
+    }
+
+    for (const pathKey of candidatePaths) {
+        try {
+            const docRef = doc(db, "users", pathKey, "data", "facts");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data && Array.isArray(data.facts)) {
+                    for (const f of data.facts) {
+                        if (f && f.content) {
+                            const sig = f.id || f.content;
+                            factMap.set(sig, f);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`getFactsAsync warning for users/${pathKey}/data/facts:`, e);
+        }
+    }
+
+    const mergedFacts = Array.from(factMap.values());
+    if (mergedFacts.length > 0) {
+        await saveFacts(user, mergedFacts);
+    }
+
+    return mergedFacts;
+};
+
+export const saveFacts = async (user: UserProfile, facts: UserFact[]) => {
     const key = getStorageKey(user, 'facts');
     localStorage.setItem(key, JSON.stringify(facts));
+    const userKey = getUserMobileOrId(user);
+    try {
+        await setDoc(doc(db, "users", userKey, "data", "facts"), {
+            facts,
+            updatedAt: serverTimestamp(),
+            lastUpdated: formatStdDate(new Date())
+        }, { merge: true });
+    } catch (e) {
+        console.warn("saveFacts cloud sync warning:", e);
+    }
 };
 
-export const deleteFact = (user: UserProfile, factId: string) => {
+export const deleteFact = async (user: UserProfile, factId: string) => {
     const facts = getFacts(user);
     const updated = facts.filter(f => f.id !== factId);
-    saveFacts(user, updated);
+    await saveFacts(user, updated);
 };
 
 export const getLocalMessages = (user: UserProfile): ChatMessage[] => {
-    const key = getStorageKey(user, 'history');
-    try {
-        const data = localStorage.getItem(key);
-        if (!data) return [];
-        const parsedData = JSON.parse(data);
-        return Array.isArray(parsedData) ? parsedData : [];
-    } catch (e) { return []; }
+    const primaryKey = getStorageKey(user, 'history');
+    const userKey = getUserMobileOrId(user);
+    const candidateKeys = [
+        primaryKey,
+        'NEXA_ADMIN_DATA_history',
+        'nexa_chat_history',
+        'nexa_history',
+        'chat_history',
+        `NEXA_USER_DATA_${userKey}_history`,
+        user.mobile ? `NEXA_USER_DATA_${user.mobile}_history` : ''
+    ].filter(Boolean);
+
+    const allMsgs: ChatMessage[] = [];
+    const seen = new Set<string>();
+
+    for (const k of candidateKeys) {
+        try {
+            const raw = localStorage.getItem(k);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                for (const m of parsed) {
+                    if (m && m.text) {
+                        const signature = `${m.role}_${m.text}_${m.timestamp || 0}`;
+                        if (!seen.has(signature)) {
+                            seen.add(signature);
+                            allMsgs.push(m);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    allMsgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+    if (allMsgs.length > 0) {
+        try {
+            localStorage.setItem(primaryKey, JSON.stringify(allMsgs));
+        } catch (e) {}
+    }
+
+    return allMsgs;
+};
+
+// Exponential Backoff Retry Helper for robust Firestore state hydration & sync
+const fetchWithExponentialBackoff = async <T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 4,
+    baseDelayMs: number = 300
+): Promise<T> => {
+    let attempt = 0;
+    while (true) {
+        try {
+            return await fn();
+        } catch (error) {
+            attempt++;
+            if (attempt > maxRetries) {
+                throw error;
+            }
+            const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 100;
+            console.warn(`[Firestore Sync] Attempt ${attempt}/${maxRetries} failed. Retrying in ${Math.round(delay)}ms...`, error);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+    }
 };
 
 export const syncMemoryWithCloud = async (user: UserProfile): Promise<ChatMessage[]> => {
+    const localMsgs = getLocalMessages(user);
     if (!navigator.onLine) {
-        return getLocalMessages(user);
+        return localMsgs;
     }
-    let retries = 0;
-    const maxRetries = 2;
-    while (retries <= maxRetries) {
+
+    const userKey = getUserMobileOrId(user);
+    const candidatePaths = Array.from(new Set([
+        userKey,
+        'admin_001',
+        'admin',
+        user.mobile ? user.mobile.trim() : '',
+        user.id ? user.id.trim() : ''
+    ])).filter(Boolean);
+
+    const cloudMap = new Map<string, ChatMessage>();
+
+    for (const pathKey of candidatePaths) {
         try {
-            const chatsRef = collection(db, "users", user.mobile, "chats");
-            // --- CRITICAL UPDATE: INCREASED LIMIT TO 5000 FOR "INFINITE" MEMORY ---
-            // This ensures NEXA retrieves chats from months/years ago.
-            const q = query(chatsRef, orderBy("timestamp", "desc"), limit(5000));
-            const querySnapshot = await getDocs(q);
-            const messages: ChatMessage[] = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                if(data.text && data.role) {
-                    const msg = data as ChatMessage;
-                    messages.push(msg);
+            const querySnapshot = await fetchWithExponentialBackoff(async () => {
+                const chatsRef = collection(db, "users", pathKey, "chats");
+                return await getDocs(chatsRef);
+            }, 3, 300);
+
+            querySnapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data) {
+                    const textVal = data.text || data.content || data.message;
+                    if (textVal) {
+                        const roleVal = data.role === 'user' ? 'user' : 'model';
+                        const timeVal = Number(data.timestamp || data.createdAt || Date.now());
+                        const msg: ChatMessage = {
+                            role: roleVal,
+                            text: String(textVal),
+                            timestamp: timeVal,
+                            image: data.image,
+                            video: data.video,
+                            pdf: data.pdf,
+                            fileInfo: data.fileInfo
+                        };
+                        const sig = `${msg.role}_${msg.text}_${msg.timestamp}`;
+                        if (!cloudMap.has(sig)) {
+                            cloudMap.set(sig, msg);
+                        }
+                    }
                 }
             });
-            const sortedMessages = messages.reverse();
-            if (sortedMessages.length > 0) {
-                const key = getStorageKey(user, 'history');
-                localStorage.setItem(key, JSON.stringify(sortedMessages));
-                return sortedMessages;
-            } else {
-                 const local = getLocalMessages(user);
-                 if (local.length > 0) {
-                     for (const msg of local) { await appendMessageToMemory(user, msg); }
-                     return local;
-                 }
-                 return [];
-            }
         } catch (e) {
-            retries++;
-            if (retries > maxRetries) break;
-            await new Promise(r => setTimeout(r, 1000));
+            console.warn(`Firestore sync warning for users/${pathKey}/chats after exponential retries:`, e);
         }
     }
-    return getLocalMessages(user);
+
+    const cloudMsgs = Array.from(cloudMap.values());
+
+    // Merge cloud and local
+    const mergedMap = new Map<string, ChatMessage>();
+    for (const m of localMsgs) {
+        const sig = `${m.role}_${m.text}_${m.timestamp || 0}`;
+        mergedMap.set(sig, m);
+    }
+    for (const m of cloudMsgs) {
+        const sig = `${m.role}_${m.text}_${m.timestamp || 0}`;
+        mergedMap.set(sig, m);
+    }
+
+    const finalMessages = Array.from(mergedMap.values());
+    finalMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+    // Save to local storage
+    if (finalMessages.length > 0) {
+        const primaryKey = getStorageKey(user, 'history');
+        try {
+            localStorage.setItem(primaryKey, JSON.stringify(finalMessages));
+        } catch (e) {}
+
+        // Upload any local messages that are missing from cloudMap to Firestore
+        for (const msg of finalMessages) {
+            const sig = `${msg.role}_${msg.text}_${msg.timestamp || 0}`;
+            if (!cloudMap.has(sig)) {
+                try {
+                    await appendMessageToMemory(user, msg);
+                } catch (e) {}
+            }
+        }
+    }
+
+    return finalMessages;
 };
 
 export const restoreMemoryFromCloud = syncMemoryWithCloud;
@@ -875,15 +1083,16 @@ export const appendMessageToMemory = async (user: UserProfile, message: ChatMess
 
     if (!navigator.onLine) return;
 
+    const userKey = getUserMobileOrId(user);
     try {
         const readableId = generateReadableId();
-        const docRef = doc(db, "users", user.mobile, "chats", readableId);
+        const docRef = doc(db, "users", userKey, "chats", readableId);
         
         let cloudMessage = { ...message };
 
         if (cloudMessage.image && cloudMessage.image.length > 1000 && cloudMessage.image.startsWith('data:image')) {
             try {
-                const imageRef = ref(storage, `users/${user.mobile}/chat_media/${readableId}_img`);
+                const imageRef = ref(storage, `users/${userKey}/chat_media/${readableId}_img`);
                 await uploadString(imageRef, cloudMessage.image, 'data_url');
                 const downloadURL = await getDownloadURL(imageRef);
                 cloudMessage.image = downloadURL;
@@ -992,10 +1201,11 @@ export const getMemoryForPrompt = async (user: UserProfile): Promise<{role: 'use
 export const clearAllMemory = async (user: UserProfile) => {
     localStorage.removeItem(getStorageKey(user, 'history'));
     localStorage.removeItem(getStorageKey(user, 'facts'));
+    const userKey = getUserMobileOrId(user);
     try {
-         const chatsRef = collection(db, "users", user.mobile, "chats");
+         const chatsRef = collection(db, "users", userKey, "chats");
          const snapshot = await getDocs(chatsRef);
-         snapshot.forEach(doc => deleteDoc(doc.ref));
+         snapshot.forEach(docSnap => deleteDoc(docSnap.ref));
     } catch(e) {}
 };
 

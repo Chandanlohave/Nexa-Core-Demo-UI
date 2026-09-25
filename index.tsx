@@ -8,6 +8,10 @@ import CrashScreen from './components/CrashScreen';
 const rootElement = document.getElementById('root');
 
 if (rootElement) {
+  if (typeof (window as any).__NEXA_MOUNTED__ === 'function') {
+    (window as any).__NEXA_MOUNTED__();
+  }
+  rootElement.innerHTML = '';
   const root = createRoot(rootElement);
   
   // CHECK FOR SAFE MODE URL PARAMETER (?safemode=true)
