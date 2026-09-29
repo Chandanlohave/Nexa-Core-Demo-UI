@@ -12,6 +12,7 @@ interface UserSettingsPanelProps {
   reminders?: Reminder[];
   onDeleteReminder?: (id: string) => void;
   onAddReminder?: (text: string) => void;
+  onOpenVault?: () => void;
 }
 
 const THEME_COLORS = [

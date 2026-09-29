@@ -1,7 +1,8 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Download, Maximize2, X } from 'lucide-react';
+import { Download, Maximize2, X, FileText, FileSpreadsheet, FileDown } from 'lucide-react';
 import { ChatMessage, UserRole, HUDState } from '../types';
+import { exportToPdf, exportToExcel, exportToWord, isReportContent } from '../services/reportExportService';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -184,6 +185,75 @@ const CopyButton: React.FC<{ text: string }> = ({ text }) => {
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
             )}
         </button>
+    );
+};
+
+// --- REPORT DOWNLOAD BAR COMPONENT ---
+const ReportDownloadBar: React.FC<{ text: string }> = ({ text }) => {
+    const [downloading, setDownloading] = useState<'pdf' | 'excel' | 'word' | null>(null);
+
+    const handlePdf = () => {
+        setDownloading('pdf');
+        setTimeout(() => {
+            exportToPdf('NEXA System Report', text);
+            setDownloading(null);
+        }, 150);
+    };
+
+    const handleExcel = () => {
+        setDownloading('excel');
+        setTimeout(() => {
+            exportToExcel('NEXA System Metrics', text);
+            setDownloading(null);
+        }, 150);
+    };
+
+    const handleWord = () => {
+        setDownloading('word');
+        exportToWord('NEXA System Document', text)
+            .finally(() => {
+                setDownloading(null);
+            });
+    };
+
+    return (
+        <div className="mt-3.5 p-2.5 rounded-xl bg-slate-950/90 border border-cyan-500/40 backdrop-blur-md shadow-[0_0_20px_rgba(41,223,255,0.18)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-fade-in">
+            <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                <span className="text-[10.5px] font-mono font-bold text-cyan-300 tracking-wider">
+                    📄 DOWNLOAD REPORT IN FORMAT:
+                </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    onClick={handlePdf}
+                    disabled={downloading !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/50 text-red-300 text-xs font-mono font-semibold transition-all hover:scale-105 active:scale-95 shadow cursor-pointer disabled:opacity-50"
+                    title="Download as Official PDF Document"
+                >
+                    <FileText className="w-3.5 h-3.5 text-red-400" />
+                    <span>{downloading === 'pdf' ? 'Preparing...' : 'PDF (.pdf)'}</span>
+                </button>
+                <button
+                    onClick={handleExcel}
+                    disabled={downloading !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 text-xs font-mono font-semibold transition-all hover:scale-105 active:scale-95 shadow cursor-pointer disabled:opacity-50"
+                    title="Download as Real Microsoft Excel Workbook (.xlsx)"
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{downloading === 'excel' ? 'Preparing...' : 'Excel (.xlsx)'}</span>
+                </button>
+                <button
+                    onClick={handleWord}
+                    disabled={downloading !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/50 text-blue-300 text-xs font-mono font-semibold transition-all hover:scale-105 active:scale-95 shadow cursor-pointer disabled:opacity-50"
+                    title="Download as Real Microsoft Word Document (.docx)"
+                >
+                    <FileDown className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{downloading === 'word' ? 'Preparing...' : 'Docs (.docx)'}</span>
+                </button>
+            </div>
+        </div>
     );
 };
 
@@ -445,6 +515,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, userName, userRole = Us
                             </a>
                         ))}
                     </div>
+                )}
+
+                {!isUser && displayContent && isReportContent(displayContent) && (
+                    <ReportDownloadBar text={displayContent} />
                 )}
 
                 <div className={`flex items-center justify-between text-[8px] font-mono uppercase tracking-widest mt-1 opacity-60 ${isUser ? 'text-nexa-blue' : 'text-nexa-cyan'}`}>
