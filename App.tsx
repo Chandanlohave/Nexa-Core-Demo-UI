@@ -22,12 +22,15 @@ import { UserProfile, UserRole, HUDState, ChatMessage, AppConfig, StudyHubSubjec
 import { generateTutorLesson, generateImageContent, generateVideoContent, editImageContent, isUserBhabhi, generateTopicContent, generateIntroductoryMessage } from './services/geminiService';
 import { playMicOnSound, playErrorSound, playAdminLoginSound } from './services/audioService';
 import { appendMessageToMemory, clearAllMemory, clearAdminNotifications, getLocalMessages, logAdminNotification, syncUserProfile, fetchSystemConfig, syncMemoryWithCloud, getAdminNotifications, getUserProfile, syncFamilyTree } from './services/memoryService';
-import { speak as speakTextTTS, stop as stopTextTTS, speakAgentText } from './services/ttsService';
+import { speak as speakTextTTS, stop as stopTextTTS, speakAgentText, setTTSVolumeListener } from './services/ttsService';
 import { LiveSessionManager } from './services/liveService';
 import { analyzeSystemError, RepairPlan } from './services/selfRepairService';
 import { getRobustGithubConfig, revertLastChange } from './services/githubService';
 import { NexaCoreController } from './core/NexaCoreController';
 import { verifyAdminSessionToken, clearAdminSessionToken } from './services/securityGuardService';
+import { triggerNativeHaptic, startNativeScreenShare, stopNativeScreenShare, isRunningInNativeAndroidApp, toggleDeviceFlashlight } from './services/nativeBridgeService';
+import { NexaAnimeAvatar } from './components/avatar/NexaAnimeAvatar';
+import { AvatarSettingsModal } from './components/avatar/AvatarSettingsModal';
 
 // --- ICONS ---
 const GearIcon = () => ( <svg className="w-5 h-5 text-nexa-cyan/80 dark:hover:text-white hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.065 2.572c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 001.065-2.572c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> );
@@ -60,7 +63,7 @@ const MicIcon = ({ rotationDuration = '8s' }: { rotationDuration?: string }) => 
     </svg>
 );
 
-const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, onWorkspaceHub, onOpenVault, isOffline }: any) => {
+const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onLogout, onSettings, latency, onStudyHub, onWorkspaceHub, onOpenVault, isOffline, avatarEnabled = false, onToggleAvatar }: any) => {
     const firstName = React.useMemo(() => {
         if (!userName) return 'USER';
         const clean = userName.trim();
@@ -130,8 +133,26 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
                 </span>
             </div>
 
-            {/* Right Column: Compact HUD Mode button + Logout */}
+            {/* Right Column: Avatar Toggle Button + Compact HUD Mode button + Logout */}
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 justify-end">
+                {/* 3D Anime Companion Avatar Button with accessible touch target and obvious active/inactive state */}
+                <button 
+                    onClick={onToggleAvatar}
+                    className={`h-7 sm:h-8 px-2 sm:px-2.5 rounded-full font-mono text-[8px] sm:text-[9px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm border min-h-[44px] min-w-[44px] sm:min-h-[48px] sm:min-w-[48px] touch-manipulation ${
+                        avatarEnabled 
+                            ? 'bg-nexa-cyan/20 hover:bg-nexa-cyan/30 text-nexa-cyan border-nexa-cyan shadow-[0_0_12px_rgba(41,223,255,0.4)]' 
+                            : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border-zinc-700/60'
+                    }`}
+                    title={avatarEnabled ? "3D Anime Companion: Active (Click to switch to Core HUD)" : "3D Anime Companion: Off (Click to activate 3D Avatar)"}
+                    aria-label={avatarEnabled ? "Avatar ON" : "Avatar OFF"}
+                >
+                    <span className="text-[11px] sm:text-xs leading-none">🎀</span>
+                    <span className="hidden xs:inline tracking-wider">
+                        {avatarEnabled ? 'AVATAR: ON' : 'AVATAR'}
+                    </span>
+                    {avatarEnabled && <span className="w-1.5 h-1.5 rounded-full bg-nexa-cyan animate-pulse shrink-0"></span>}
+                </button>
+
                 <button 
                     onClick={onToggleHudMode}
                     className="h-6 sm:h-7 px-1.5 sm:px-2 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-mono text-[8px] sm:text-[9px] font-semibold flex items-center justify-center gap-0.5 sm:gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
@@ -141,7 +162,7 @@ const StatusBar = ({ userName, userRole, photoUrl, hudMode, onToggleHudMode, onL
                 </button>
                 <button 
                     onClick={onLogout} 
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center hover:bg-red-500/10 text-zinc-600 dark:text-zinc-300 hover:text-red-400 transition-colors cursor-pointer shrink-0" 
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center hover:bg-red-500/10 text-zinc-600 dark:text-zinc-300 hover:text-red-400 transition-colors cursor-pointer shrink-0 min-w-[44px] min-h-[44px]" 
                     title="Logout"
                 >
                     <LogoutIcon />
@@ -341,7 +362,9 @@ const App: React.FC = () => {
             accentColor: '#29DFFF',
             ecoMode: false,
             phoenixEnabled: false,
-            hudMode: 'classic'
+            hudMode: 'classic',
+            avatarEnabled: false,
+            lipSyncSensitivity: 1.2
         };
         try {
             const saved = localStorage.getItem('nexa_config');
@@ -357,6 +380,8 @@ const App: React.FC = () => {
     
     const [showAdmin, setShowAdmin] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showAvatarModal, setShowAvatarModal] = useState(false);
+    const [avatarVersion, setAvatarVersion] = useState(0);
     const [showStudyHub, setShowStudyHub] = useState(false);
     const [showWorkspaceHub, setShowWorkspaceHub] = useState(false);
     const [showAccounts, setShowAccounts] = useState(false);
@@ -389,6 +414,9 @@ const App: React.FC = () => {
 
     const handleToggleScreenShare = useCallback(async () => {
         if (isScreenSharing) {
+            if (isRunningInNativeAndroidApp()) {
+                stopNativeScreenShare();
+            }
             if (screenStreamRef.current) {
                 screenStreamRef.current.getTracks().forEach(t => t.stop());
                 screenStreamRef.current = null;
@@ -398,6 +426,16 @@ const App: React.FC = () => {
             setHudState(HUDState.IDLE);
             setScreenShareNotice({ message: "Screen sharing disconnected." });
             setTimeout(() => setScreenShareNotice(null), 3000);
+            return;
+        }
+
+        // 1. If running in actual Android App, launch Native MediaProjection Screen Share directly
+        if (isRunningInNativeAndroidApp()) {
+            startNativeScreenShare();
+            setIsScreenSharing(true);
+            setHudState(HUDState.WATCHING);
+            setScreenShareNotice({ message: "Android Native Screen Share Active // Streaming to Gemini Live" });
+            setTimeout(() => setScreenShareNotice(null), 4000);
             return;
         }
 
@@ -701,6 +739,31 @@ const App: React.FC = () => {
         root.classList.add(shouldUseDark ? 'dark' : 'light');
     }, [config]);
 
+    // Synchronize TTS speech amplitude to audioRef for 3D Anime Avatar mouth lip-sync
+    useEffect(() => {
+        setTTSVolumeListener((vol) => {
+            if (audioRef.current) {
+                audioRef.current.vol = vol;
+                audioRef.current.mid = vol;
+            } else {
+                audioRef.current = { vol, bass: vol, mid: vol, treble: vol };
+            }
+        });
+        return () => {
+            setTTSVolumeListener(null);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (hudState === HUDState.THINKING) {
+            triggerNativeHaptic(50);
+        } else if (hudState === HUDState.SPEAKING) {
+            triggerNativeHaptic(25);
+        } else if (hudState === HUDState.WARNING || hudState === HUDState.GLITCH) {
+            triggerNativeHaptic(120);
+        }
+    }, [hudState]);
+
     const speakText = async (text: string, force: boolean = false) => {
          if (user) {
              stopTextTTS();
@@ -896,6 +959,14 @@ const App: React.FC = () => {
     };
 
     const handleToggleTorch = useCallback(async () => {
+        if (isRunningInNativeAndroidApp()) {
+            const newState = !isTorchOn;
+            const success = toggleDeviceFlashlight(newState);
+            if (success) {
+                setIsTorchOn(newState);
+                return;
+            }
+        }
         if (!cameraStreamRef.current) return;
         const track = cameraStreamRef.current.getVideoTracks()[0];
         if (!track) return;
@@ -1237,6 +1308,12 @@ const App: React.FC = () => {
                         userRole={user.role} 
                         photoUrl={user.photoUrl}
                         hudMode={config.hudMode}
+                        avatarEnabled={config.avatarEnabled || false}
+                        onToggleAvatar={() => setConfig(prev => {
+                            const updated: AppConfig = { ...prev, avatarEnabled: !prev.avatarEnabled };
+                            try { localStorage.setItem('nexa_config', JSON.stringify(updated)); } catch(e) {}
+                            return updated;
+                        })}
                         onToggleHudMode={() => setConfig(prev => {
                             const next: 'matrix' | 'classic' = prev.hudMode === 'classic' ? 'matrix' : 'classic';
                             const updated: AppConfig = { ...prev, hudMode: next };
@@ -1324,19 +1401,31 @@ const App: React.FC = () => {
                     
                     <div className="flex-1 relative min-h-0 w-full flex items-center justify-center pointer-events-none">
                         <div className="w-full h-full pointer-events-auto">
-                            <HUD 
-                                state={hudState} 
-                                rotationSpeed={config.hudRotationSpeed} 
-                                audioRef={audioRef} 
-                                accentColor={config.accentColor} 
-                                ecoMode={config.ecoMode} 
-                                gestureData={gestureData}
-                                visualMode={config.hudMode === 'classic' ? 'CLASSIC' : 'NEBULA'}
-                                activeHighlightAgentId={activeHighlightAgentId}
-                                customAgents={customAgents}
-                                messages={messages}
-                                onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
-                            />
+                            {config.avatarEnabled ? (
+                                <NexaAnimeAvatar 
+                                    key={`nexa_vrm_avatar_${avatarVersion}_${config.ecoMode}`}
+                                    state={hudState} 
+                                    audioRef={audioRef} 
+                                    accentColor={config.accentColor} 
+                                    ecoMode={config.ecoMode} 
+                                    onOpenModelManager={() => setShowAvatarModal(true)}
+                                    lipSyncSensitivity={config.lipSyncSensitivity || 1.2}
+                                />
+                            ) : (
+                                <HUD 
+                                    state={hudState} 
+                                    rotationSpeed={config.hudRotationSpeed} 
+                                    audioRef={audioRef} 
+                                    accentColor={config.accentColor} 
+                                    ecoMode={config.ecoMode} 
+                                    gestureData={gestureData}
+                                    visualMode={config.hudMode === 'classic' ? 'CLASSIC' : 'NEBULA'}
+                                    activeHighlightAgentId={activeHighlightAgentId}
+                                    customAgents={customAgents}
+                                    messages={messages}
+                                    onResetZoom={() => gestureCtrlRef.current?.resetZoom()}
+                                />
+                            )}
                         </div>
 
                         {/* Top-Right Air Gesture Sensor Switch */}
@@ -1442,7 +1531,16 @@ const App: React.FC = () => {
                             try { localStorage.setItem('nexa_user', JSON.stringify(updatedUser)); } catch(e) {}
                         }}
                     />
-                    <UserSettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} config={config} onConfigChange={setConfig} currentVoice={user.voice} onVoiceChange={handleVoiceChange} onOpenVault={() => setShowMemoryVault(true)} />
+                    <UserSettingsPanel 
+                        isOpen={showSettings} 
+                        onClose={() => setShowSettings(false)} 
+                        config={config} 
+                        onConfigChange={setConfig} 
+                        currentVoice={user.voice} 
+                        onVoiceChange={handleVoiceChange} 
+                        onOpenVault={() => setShowMemoryVault(true)}
+                        onOpenAvatarSettings={() => setShowAvatarModal(true)}
+                    />
                     <StudyHubPanel isOpen={showStudyHub} onClose={() => setShowStudyHub(false)} user={user} onStartLesson={(subject, topic) => {
                          processUserInput(`Teach me ${topic || 'summary'} from ${subject.courseName}`, null);
                          setShowStudyHub(false);
@@ -1506,6 +1604,24 @@ const App: React.FC = () => {
                         isOpen={showTacticalHub}
                         onClose={() => setShowTacticalHub(false)}
                         user={user}
+                    />
+
+                    <AvatarSettingsModal 
+                        isOpen={showAvatarModal}
+                        onClose={() => setShowAvatarModal(false)}
+                        onModelChanged={() => setAvatarVersion(v => v + 1)}
+                        lipSyncSensitivity={config.lipSyncSensitivity || 1.2}
+                        onSensitivityChange={(val) => setConfig(prev => {
+                            const updated = { ...prev, lipSyncSensitivity: val };
+                            try { localStorage.setItem('nexa_config', JSON.stringify(updated)); } catch(e) {}
+                            return updated;
+                        })}
+                        avatarEnabled={config.avatarEnabled || false}
+                        onToggleAvatar={(enabled) => setConfig(prev => {
+                            const updated = { ...prev, avatarEnabled: enabled };
+                            try { localStorage.setItem('nexa_config', JSON.stringify(updated)); } catch(e) {}
+                            return updated;
+                        })}
                     />
                 </>
             )}

@@ -160,6 +160,8 @@ export interface AppConfig {
   phoenixEnabled?: boolean; // Safety switch for self-coding
   ecoMode?: boolean; // Battery Saver Mode
   hudMode?: 'matrix' | 'classic'; // System Matrix HUD Mode
+  avatarEnabled?: boolean; // 3D Anime Avatar Companion Toggle
+  lipSyncSensitivity?: number; // Lip-sync amplitude multiplier
 }
 
 export interface StudyHubSubject {

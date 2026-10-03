@@ -186,6 +186,23 @@ app.post("/api/generate-image", createRateLimiter(20, 60 * 1000), async (req, re
   }
 });
 
+// Serve static 3D models with correct MIME types for Web and Android WebView
+const publicModelsPath = path.join(process.cwd(), 'public', 'models');
+const distModelsPath = path.join(process.cwd(), 'dist', 'models');
+const modelsPath = fs.existsSync(publicModelsPath) ? publicModelsPath : distModelsPath;
+
+app.use('/models', express.static(modelsPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.vrm')) {
+      res.setHeader('Content-Type', 'model/gltf-binary');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}));
+
+app.use(express.static(path.join(process.cwd(), 'public')));
+
 // Setup Vite Middleware for Dev, or Static for Prod
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -201,7 +218,7 @@ async function startServer() {
 
     app.use(async (req, res, next) => {
       const url = req.originalUrl;
-      if (url.startsWith('/api') || url.startsWith('/@') || url.startsWith('/node_modules') || url.startsWith('/src')) {
+      if (url.startsWith('/api') || url.startsWith('/models') || url.startsWith('/@') || url.startsWith('/node_modules') || url.startsWith('/src')) {
         return next();
       }
       try {

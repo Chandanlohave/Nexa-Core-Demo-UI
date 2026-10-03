@@ -13,6 +13,7 @@ interface UserSettingsPanelProps {
   onDeleteReminder?: (id: string) => void;
   onAddReminder?: (text: string) => void;
   onOpenVault?: () => void;
+  onOpenAvatarSettings?: () => void;
 }
 
 const THEME_COLORS = [
@@ -24,7 +25,7 @@ const THEME_COLORS = [
     { name: 'Arctic Teal', value: '#00ffcc' }
 ];
 
-const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange, currentVoice = 'Kore', onVoiceChange, reminders = [], onDeleteReminder, onAddReminder }) => {
+const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, config, onConfigChange, currentVoice = 'Kore', onVoiceChange, reminders = [], onDeleteReminder, onAddReminder, onOpenAvatarSettings }) => {
   const [taskInput, setTaskInput] = useState('');
   const [geminiKeyInput, setGeminiKeyInput] = useState(() => localStorage.getItem('nexa_client_api_key') || '');
   const [groqKeyInput, setGroqKeyInput] = useState(() => localStorage.getItem('nexa_client_groq_key') || '');
@@ -264,6 +265,26 @@ const UserSettingsPanel: React.FC<UserSettingsPanelProps> = ({ isOpen, onClose, 
                 className={`w-full py-2 text-xs font-mono border transition-all ${config.ecoMode ? 'border-green-500 text-green-500 bg-green-900/20' : 'border-zinc-600 text-zinc-400'}`}
               >
                 {config.ecoMode ? 'ECO MODE ACTIVE (SAVES BATTERY)' : 'HIGH PERFORMANCE MODE'}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {
+                  if (onOpenAvatarSettings) {
+                    onClose();
+                    onOpenAvatarSettings();
+                  } else {
+                    onConfigChange({ ...config, avatarEnabled: !config.avatarEnabled });
+                  }
+                }}
+                className={`w-full py-2 text-xs font-mono border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  config.avatarEnabled 
+                    ? 'border-nexa-cyan text-nexa-cyan bg-nexa-cyan/10 shadow-[0_0_12px_rgba(41,223,255,0.2)]' 
+                    : 'border-zinc-700 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>🎀</span>
+                <span>{config.avatarEnabled ? '3D ANIME COMPANION: ACTIVE (MANAGE VRM)' : 'ACTIVATE 3D ANIME COMPANION'}</span>
               </button>
           </div>
         </div>

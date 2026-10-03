@@ -8,6 +8,14 @@ const CACHE_VERSION = 'v28_female_natural_voice';
 let audioCtx: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 let currentSessionId = 0;
+let ttsAnalyser: AnalyserNode | null = null;
+let ttsMonitoringInterval: number | null = null;
+type TTSVolumeListener = (vol: number) => void;
+let activeTTSVolumeListener: TTSVolumeListener | null = null;
+
+export const setTTSVolumeListener = (listener: TTSVolumeListener | null) => {
+    activeTTSVolumeListener = listener;
+};
 
 // --- INDEXED DB IMPLEMENTATION ---
 const DB_NAME = 'NexaTTSCache';
@@ -144,11 +152,23 @@ const playAudioBuffer = (buffer: AudioBuffer | null, sessionId: number, onStart:
     try {
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
-        source.connect(audioCtx.destination);
+
+        if (!ttsAnalyser) {
+            ttsAnalyser = audioCtx.createAnalyser();
+            ttsAnalyser.fftSize = 256;
+            ttsAnalyser.smoothingTimeConstant = 0.3;
+            ttsAnalyser.connect(audioCtx.destination);
+        }
+        source.connect(ttsAnalyser);
         
         source.onended = () => {
             if (currentSource === source) {
                 currentSource = null;
+                if (ttsMonitoringInterval) {
+                    clearInterval(ttsMonitoringInterval);
+                    ttsMonitoringInterval = null;
+                }
+                if (activeTTSVolumeListener) activeTTSVolumeListener(0);
                 if (sessionId === currentSessionId) {
                     onEnd();
                 }
@@ -160,9 +180,28 @@ const playAudioBuffer = (buffer: AudioBuffer | null, sessionId: number, onStart:
         if (sessionId === currentSessionId) {
             onStart();
         }
+
+        // Amplitude monitor for mouth movement / lip-sync
+        if (ttsMonitoringInterval) clearInterval(ttsMonitoringInterval);
+        const dataArr = new Uint8Array(ttsAnalyser.frequencyBinCount);
+        ttsMonitoringInterval = window.setInterval(() => {
+            if (ttsAnalyser && currentSource) {
+                ttsAnalyser.getByteFrequencyData(dataArr);
+                let sum = 0;
+                for (let i = 0; i < dataArr.length; i++) sum += dataArr[i];
+                const avg = (sum / dataArr.length) / 255;
+                if (activeTTSVolumeListener) activeTTSVolumeListener(avg);
+            }
+        }, 35);
+
         source.start(0);
     } catch (e) {
         console.warn("playAudioBuffer error:", e);
+        if (ttsMonitoringInterval) {
+            clearInterval(ttsMonitoringInterval);
+            ttsMonitoringInterval = null;
+        }
+        if (activeTTSVolumeListener) activeTTSVolumeListener(0);
         if (sessionId === currentSessionId) {
             onEnd();
         }
@@ -412,6 +451,13 @@ export const speakAgentText = async (
 
 export const stop = (): void => {
     currentSessionId++;
+    if (ttsMonitoringInterval) {
+        clearInterval(ttsMonitoringInterval);
+        ttsMonitoringInterval = null;
+    }
+    if (activeTTSVolumeListener) {
+        activeTTSVolumeListener(0);
+    }
     if (currentSource) {
         try {
             currentSource.onended = null;
